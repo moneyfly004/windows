@@ -6,11 +6,7 @@ import 'package:hiddify/core/app_info/app_info_provider.dart';
 import 'package:hiddify/core/directories/directories_provider.dart';
 import 'package:hiddify/core/localization/translations.dart';
 import 'package:hiddify/core/model/constants.dart';
-import 'package:hiddify/core/model/failures.dart';
 import 'package:hiddify/core/widget/adaptive_icon.dart';
-import 'package:hiddify/features/app_update/notifier/app_update_notifier.dart';
-import 'package:hiddify/features/app_update/notifier/app_update_state.dart';
-import 'package:hiddify/features/app_update/widget/new_version_dialog.dart';
 import 'package:hiddify/features/common/nested_app_bar.dart';
 import 'package:hiddify/gen/assets.gen.dart';
 import 'package:hiddify/utils/utils.dart';
@@ -23,43 +19,17 @@ class AboutPage extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(translationsProvider);
     final appInfo = ref.watch(appInfoProvider).requireValue;
-    final appUpdate = ref.watch(appUpdateNotifierProvider);
-
-    ref.listen(
-      appUpdateNotifierProvider,
-      (_, next) async {
-        if (!context.mounted) return;
-        switch (next) {
-          case AppUpdateStateAvailable(:final versionInfo) ||
-                AppUpdateStateIgnored(:final versionInfo):
-            return NewVersionDialog(
-              appInfo.presentVersion,
-              versionInfo,
-              canIgnore: false,
-            ).show(context);
-          case AppUpdateStateError(:final error):
-            return CustomToast.error(t.presentShortError(error)).show(context);
-          case AppUpdateStateNotAvailable():
-            return CustomToast.success(t.appUpdate.notAvailableMsg)
-                .show(context);
-        }
-      },
-    );
 
     final conditionalTiles = [
       if (appInfo.release.allowCustomUpdateChecker)
         ListTile(
           title: Text(t.about.checkForUpdate),
-          trailing: switch (appUpdate) {
-            AppUpdateStateChecking() => const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(),
-              ),
-            _ => const Icon(FluentIcons.arrow_sync_24_regular),
-          },
+          trailing: const Icon(FluentIcons.arrow_sync_24_regular),
           onTap: () async {
-            await ref.read(appUpdateNotifierProvider.notifier).check();
+            // 直接跳转到 GitHub releases 页面
+            await UriUtils.tryLaunch(
+              Uri.parse(Constants.githubLatestReleaseUrl),
+            );
           },
         ),
       if (PlatformUtils.isDesktop)
