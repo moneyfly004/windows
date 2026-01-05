@@ -116,35 +116,55 @@ jobs:
 
       - name: Copy Windows files
         run: |
-          New-Item -ItemType Directory -Force -Path "out"
+          New-Item -ItemType Directory -Force -Path "out" | Out-Null
           $version = "${{ github.event.inputs.version }}"
           if ($version -eq "") {
             $version = "${{ github.ref_name }}"
           }
           $version = $version -replace '^v', ''
           
+          $filesCopied = $false
+          
           # 优先使用 flutter_distributor 生成的包
           if (Test-Path "dist") {
-            Get-ChildItem -Path "dist" -Filter "*.exe" | ForEach-Object {
-              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.exe"
-              echo "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.exe"
+            Write-Host "Checking dist directory..."
+            Get-ChildItem -Path "dist" -Recurse -File | ForEach-Object {
+              Write-Host "Found file: $($_.FullName)"
             }
-            Get-ChildItem -Path "dist" -Filter "*.msix" | ForEach-Object {
-              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.msix"
-              echo "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.msix"
+            
+            Get-ChildItem -Path "dist" -Recurse -Filter "*.exe" | ForEach-Object {
+              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.exe" -Force
+              Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.exe"
+              $filesCopied = $true
             }
-            Get-ChildItem -Path "dist" -Filter "*.zip" | ForEach-Object {
-              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.zip"
-              echo "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.zip"
+            Get-ChildItem -Path "dist" -Recurse -Filter "*.msix" | ForEach-Object {
+              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.msix" -Force
+              Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.msix"
+              $filesCopied = $true
+            }
+            Get-ChildItem -Path "dist" -Recurse -Filter "*.zip" | ForEach-Object {
+              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.zip" -Force
+              Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.zip"
+              $filesCopied = $true
             }
           }
           
           # 如果没有 dist 目录，使用 build 目录
-          if (-not (Test-Path "dist") -and (Test-Path "build\windows\x64\runner\Release")) {
+          if (-not $filesCopied -and (Test-Path "build\windows\x64\runner\Release")) {
+            Write-Host "Using build directory..."
             Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-x64-$version.zip" -Force
-            echo "✓ Created Moneyfly-Windows-x64-$version.zip from build directory"
+            Write-Host "✓ Created Moneyfly-Windows-x64-$version.zip from build directory"
+            $filesCopied = $true
           }
           
+          if (-not $filesCopied) {
+            Write-Error "No files to copy! Build may have failed."
+            Write-Host "Dist exists: $(Test-Path 'dist')"
+            Write-Host "Build exists: $(Test-Path 'build\windows\x64\runner\Release')"
+            exit 1
+          }
+          
+          Write-Host "=== Final output files ==="
           Get-ChildItem -Path "out" | Select-Object Name, Length
 
       - name: Upload Windows artifacts
