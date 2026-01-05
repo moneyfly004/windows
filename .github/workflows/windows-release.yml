@@ -205,36 +205,45 @@ jobs:
           
           $filesCopied = $false
           
-          # 优先使用 flutter_distributor 生成的包
+          # 优先使用 ZIP 文件（便携版，包含所有文件）
           if (Test-Path "dist") {
             Write-Host "Checking dist directory..."
             $distFiles = Get-ChildItem -Path "dist" -Recurse -File
             if ($distFiles) {
               $distFiles | ForEach-Object {
-                Write-Host "Found file: $($_.FullName)"
+                Write-Host "Found file: $($_.FullName) ($([math]::Round($_.Length/1MB, 2)) MB)"
               }
               
-              Get-ChildItem -Path "dist" -Recurse -Filter "*.exe" | ForEach-Object {
-                Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.exe" -Force
-                Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.exe"
-                $filesCopied = $true
+              # 优先查找 ZIP 文件（便携版）
+              $zipFiles = Get-ChildItem -Path "dist" -Recurse -Filter "*.zip"
+              if ($zipFiles) {
+                $zipFiles | ForEach-Object {
+                  $fileSizeMB = [math]::Round($_.Length/1MB, 2)
+                  Write-Host "Found ZIP file: $($_.Name) ($fileSizeMB MB)"
+                  Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.zip" -Force
+                  Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.zip"
+                  $filesCopied = $true
+                }
               }
-              Get-ChildItem -Path "dist" -Recurse -Filter "*.msix" | ForEach-Object {
-                Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.msix" -Force
-                Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.msix"
-                $filesCopied = $true
+              
+              # 如果没有 ZIP，再查找 MSIX（安装包）
+              if (-not $filesCopied) {
+                Get-ChildItem -Path "dist" -Recurse -Filter "*.msix" | ForEach-Object {
+                  Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.msix" -Force
+                  Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.msix"
+                  $filesCopied = $true
+                }
               }
-              Get-ChildItem -Path "dist" -Recurse -Filter "*.zip" | ForEach-Object {
-                Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.zip" -Force
-                Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.zip"
-                $filesCopied = $true
-              }
+              
+              # 最后才考虑单独的 exe（可能是安装程序，不包含所有文件）
+              # 注意：单独的 exe 文件通常只是安装程序，不是完整的便携版
+              # 所以这里不复制单独的 exe，而是使用 build 目录创建完整的 ZIP
             } else {
               Write-Host "⚠ Dist directory exists but is empty"
             }
           }
           
-          # 如果没有 dist 目录，使用 build 目录
+          # 如果没有从 dist 目录找到合适的文件，使用 build 目录创建完整的 ZIP
           if (-not $filesCopied) {
             if (Test-Path "build\windows\x64\runner\Release") {
               Write-Host "Using build directory..."
@@ -252,15 +261,50 @@ jobs:
                 }
               }
               
-              $buildFiles = Get-ChildItem -Path "build\windows\x64\runner\Release" -File
+              # 检查构建目录内容
+              Write-Host "Checking build directory contents..."
+              $buildFiles = Get-ChildItem -Path "build\windows\x64\runner\Release" -File -Recurse
               if ($buildFiles) {
                 Write-Host "Found $($buildFiles.Count) files in build directory"
-                $buildFiles | ForEach-Object {
-                  Write-Host "  - $($_.Name) ($([math]::Round($_.Length/1MB, 2)) MB)"
+                $totalSize = ($buildFiles | Measure-Object -Property Length -Sum).Sum
+                Write-Host "Total size: $([math]::Round($totalSize/1MB, 2)) MB"
+                
+                # 列出主要文件
+                $buildFiles | Where-Object { $_.Length -gt 1MB } | ForEach-Object {
+                  Write-Host "  - $($_.FullName.Replace('build\windows\x64\runner\Release\', '')) ($([math]::Round($_.Length/1MB, 2)) MB)"
                 }
+                
+                # 验证关键文件是否存在
+                $requiredFiles = @("Hiddify.exe", "libcore.dll", "flutter_windows.dll", "data\flutter_assets\AssetManifest.json")
+                $missingFiles = @()
+                foreach ($reqFile in $requiredFiles) {
+                  $fullPath = Join-Path "build\windows\x64\runner\Release" $reqFile
+                  if (-not (Test-Path $fullPath)) {
+                    $missingFiles += $reqFile
+                  }
+                }
+                
+                if ($missingFiles.Count -gt 0) {
+                  Write-Host "⚠ Warning: Missing required files:"
+                  $missingFiles | ForEach-Object { Write-Host "    - $_" }
+                } else {
+                  Write-Host "✓ All required files present"
+                }
+                
                 # 确保包含所有子目录（data 目录等）
+                Write-Host "Creating ZIP archive from build directory..."
                 Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-x64-$version.zip" -Force -CompressionLevel Optimal
-                Write-Host "✓ Created Moneyfly-Windows-x64-$version.zip from build directory"
+                
+                # 验证 ZIP 文件大小
+                $zipFile = Get-Item "out\Moneyfly-Windows-x64-$version.zip"
+                $zipSizeMB = [math]::Round($zipFile.Length/1MB, 2)
+                Write-Host "✓ Created Moneyfly-Windows-x64-$version.zip ($zipSizeMB MB)"
+                
+                if ($zipSizeMB -lt 50) {
+                  Write-Host "⚠ Warning: ZIP file size ($zipSizeMB MB) seems too small. Expected ~90-100 MB."
+                  Write-Host "Please verify that all files (including data directory) are included."
+                }
+                
                 $filesCopied = $true
               } else {
                 Write-Host "⚠ Build directory exists but is empty"
