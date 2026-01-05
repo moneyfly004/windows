@@ -42,11 +42,29 @@ jobs:
           flutter pub upgrade
 
       - name: Prepare for Windows build
+        env:
+          CHANNEL: prod
+          IS_GITHUB_ACTIONS: 1
         run: |
-          $env:CHANNEL = "prod"
           flutter config --enable-windows-desktop
           flutter doctor -v
-          make windows-prepare
+          # 尝试使用 make，如果失败则使用备用方案
+          if (Get-Command make -ErrorAction SilentlyContinue) {
+            bash -c "make windows-prepare"
+          } else {
+            Write-Host "Make not available, using direct commands..."
+            flutter pub get
+            dart run build_runner build --delete-conflicting-outputs
+            dart run slang
+            # 下载 Windows 库文件
+            $coreVersion = (Get-Content dependencies.properties | Select-String 'core.version=(\S+)' | ForEach-Object { $_.Matches.Groups[1].Value })
+            $coreUrl = "https://github.com/hiddify/hiddify-next-core/releases/download/v$coreVersion/hiddify-core-windows-amd64.tar.gz"
+            New-Item -ItemType Directory -Force -Path "libcore\bin" | Out-Null
+            Invoke-WebRequest -Uri $coreUrl -OutFile "libcore-bin.tar.gz"
+            # 使用 tar 解压（Windows 10+ 内置）
+            tar -xzf libcore-bin.tar.gz -C libcore\bin
+            Remove-Item libcore-bin.tar.gz
+          }
 
       - name: Build Windows
         env:
