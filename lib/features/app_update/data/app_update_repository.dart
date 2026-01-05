@@ -1,3 +1,4 @@
+import 'package:dartx/dartx.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:hiddify/core/http_client/dio_http_client.dart';
 import 'package:hiddify/core/model/constants.dart';
@@ -41,13 +42,30 @@ class AppUpdateRepositoryImpl
 
         final releases = response.data!.map(
           (e) => GithubReleaseParser.parse(e as Map<String, dynamic>),
-        );
-        late RemoteVersionEntity latest;
-        if (includePreReleases) {
-          latest = releases.first;
-        } else {
-          latest = releases.firstWhere((e) => e.preRelease == false);
+        ).toList();
+        
+        if (releases.isEmpty) {
+          loggy.warning("no releases found");
+          return left(const AppUpdateFailure.unexpected());
         }
+        
+        late RemoteVersionEntity? latest;
+        if (includePreReleases) {
+          latest = releases.firstOrNull;
+        } else {
+          latest = releases.firstWhereOrNull((e) => e.preRelease == false);
+          // 如果没有非 preRelease 版本，使用第一个版本
+          if (latest == null && releases.isNotEmpty) {
+            latest = releases.first;
+            loggy.debug("no non-prerelease found, using first release: ${latest.version}");
+          }
+        }
+        
+        if (latest == null) {
+          loggy.warning("failed to find latest version");
+          return left(const AppUpdateFailure.unexpected());
+        }
+        
         return right(latest);
       },
       AppUpdateFailure.unexpected,
