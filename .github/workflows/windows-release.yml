@@ -134,6 +134,25 @@ jobs:
           
           Write-Host "✓ Flutter build completed successfully"
           
+          # 复制 libcore 文件到构建输出目录
+          Write-Host "=== Copying libcore files ==="
+          if (Test-Path "libcore\bin") {
+            $libcoreFiles = Get-ChildItem -Path "libcore\bin" -File
+            if ($libcoreFiles) {
+              $releaseDir = "build\windows\x64\runner\Release"
+              Write-Host "Copying libcore files to $releaseDir..."
+              foreach ($file in $libcoreFiles) {
+                Copy-Item $file.FullName -Destination $releaseDir -Force
+                Write-Host "✓ Copied $($file.Name) to $releaseDir"
+              }
+              Write-Host "✓ All libcore files copied successfully"
+            } else {
+              Write-Host "⚠ libcore\bin directory exists but is empty"
+            }
+          } else {
+            Write-Host "⚠ libcore\bin directory not found"
+          }
+          
           # 如果 flutter_distributor 可用，尝试打包
           if (Get-Command flutter_distributor -ErrorAction SilentlyContinue) {
             Write-Host "Packaging with flutter_distributor..."
@@ -219,8 +238,26 @@ jobs:
           if (-not $filesCopied) {
             if (Test-Path "build\windows\x64\runner\Release") {
               Write-Host "Using build directory..."
+              
+              # 确保 libcore 文件已复制
+              if (Test-Path "libcore\bin") {
+                Write-Host "Ensuring libcore files are in build directory..."
+                $libcoreFiles = Get-ChildItem -Path "libcore\bin" -File
+                foreach ($file in $libcoreFiles) {
+                  $destPath = "build\windows\x64\runner\Release\$($file.Name)"
+                  if (-not (Test-Path $destPath)) {
+                    Copy-Item $file.FullName -Destination $destPath -Force
+                    Write-Host "✓ Copied $($file.Name) to build directory"
+                  }
+                }
+              }
+              
               $buildFiles = Get-ChildItem -Path "build\windows\x64\runner\Release" -File
               if ($buildFiles) {
+                Write-Host "Found $($buildFiles.Count) files in build directory"
+                $buildFiles | ForEach-Object {
+                  Write-Host "  - $($_.Name) ($([math]::Round($_.Length/1MB, 2)) MB)"
+                }
                 Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-x64-$version.zip" -Force
                 Write-Host "✓ Created Moneyfly-Windows-x64-$version.zip from build directory"
                 $filesCopied = $true
