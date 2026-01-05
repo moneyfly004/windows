@@ -70,14 +70,48 @@ jobs:
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           CHANNEL: prod
+          IS_GITHUB_ACTIONS: 1
         run: |
-          make windows-release
+          # 确保 PATH 包含 pub cache
+          $env:PATH = "$env:PATH;$env:USERPROFILE\.pub-cache\bin"
+          
+          # 尝试使用 make，如果失败则直接构建
+          $buildSuccess = $false
+          if (Get-Command make -ErrorAction SilentlyContinue) {
+            Write-Host "Using make to build..."
+            try {
+              bash -c "make windows-release"
+              $buildSuccess = $true
+            } catch {
+              Write-Host "Make build failed, trying direct build..."
+              $buildSuccess = $false
+            }
+          }
+          
+          if (-not $buildSuccess) {
+            Write-Host "Building directly with Flutter..."
+            flutter build windows --target lib/main_prod.dart --dart-define sentry_dsn=$env:SENTRY_DSN --release
+            # 如果 flutter_distributor 可用，也尝试打包
+            if (Get-Command flutter_distributor -ErrorAction SilentlyContinue) {
+              Write-Host "Packaging with flutter_distributor..."
+              flutter_distributor package --flutter-build-args=verbose --platform windows --targets exe,msix --skip-clean --build-target lib/main_prod.dart --build-dart-define sentry_dsn=$env:SENTRY_DSN
+            }
+          }
+          
           echo "=== Build output check ==="
           if (Test-Path "dist") {
+            Write-Host "Dist directory contents:"
             Get-ChildItem -Path "dist" -Recurse | Select-Object FullName, Length
           }
           if (Test-Path "build\windows\x64\runner\Release") {
+            Write-Host "Build directory contents:"
             Get-ChildItem -Path "build\windows\x64\runner\Release" -Recurse | Select-Object FullName, Length
+          }
+          
+          # 确保至少有一个输出文件
+          if (-not (Test-Path "dist") -and -not (Test-Path "build\windows\x64\runner\Release")) {
+            Write-Error "Build failed: No output files found in dist or build directory"
+            exit 1
           }
 
       - name: Copy Windows files
