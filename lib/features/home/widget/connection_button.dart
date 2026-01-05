@@ -141,10 +141,28 @@ class _ConnectionButton extends StatelessWidget {
             child: Material(
               key: const ValueKey("home_connection_button"),
               shape: const CircleBorder(),
-              color: buttonColor, // 直接使用按钮颜色，整个圆圈都是这个颜色
+              color: Colors.white,
               child: InkWell(
                 onTap: onTap,
-                child: Container(), // 移除中间的图标，只显示纯色圆圈
+                child: Padding(
+                  padding: const EdgeInsets.all(36),
+                  child: TweenAnimationBuilder(
+                    tween: ColorTween(end: buttonColor),
+                    duration: const Duration(milliseconds: 250),
+                    builder: (context, value, child) {
+                      if (useImage) {
+                        return image.image(filterQuality: FilterQuality.medium);
+                      } else {
+                        return Assets.images.logo.svg(
+                          colorFilter: ColorFilter.mode(
+                            value!,
+                            BlendMode.srcIn,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
               ),
             ).animate(target: enabled ? 0 : 1).blurXY(end: 1),
           ).animate(target: enabled ? 0 : 1).scaleXY(end: .88, curve: Curves.easeIn),
