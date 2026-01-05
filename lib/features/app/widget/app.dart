@@ -11,6 +11,7 @@ import 'package:hiddify/core/router/router.dart';
 import 'package:hiddify/core/theme/app_theme.dart';
 import 'package:hiddify/core/theme/theme_preferences.dart';
 import 'package:hiddify/features/app_update/notifier/app_update_notifier.dart';
+import 'package:hiddify/features/auth/notifier/subscription_update_notifier.dart';
 import 'package:hiddify/features/connection/widget/connection_wrapper.dart';
 import 'package:hiddify/features/profile/notifier/profiles_update_notifier.dart';
 import 'package:hiddify/features/shortcut/shortcut_wrapper.dart';
@@ -35,6 +36,9 @@ class App extends HookConsumerWidget with PresLogger {
     final upgrader = ref.watch(upgraderProvider);
 
     ref.listen(foregroundProfilesUpdateNotifierProvider, (_, __) {});
+
+    // 监听订阅更新（应用启动时自动更新）
+    ref.watch(subscriptionUpdateNotifierProvider);
 
     return WindowWrapper(
       TrayWrapper(

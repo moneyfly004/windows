@@ -13,6 +13,13 @@ import 'package:hiddify/features/profile/add/add_profile_modal.dart';
 import 'package:hiddify/features/profile/details/profile_details_page.dart';
 import 'package:hiddify/features/profile/overview/profiles_overview_page.dart';
 import 'package:hiddify/features/proxy/overview/proxies_overview_page.dart';
+import 'package:hiddify/features/auth/ui/change_password_page.dart';
+import 'package:hiddify/features/auth/ui/forgot_password_page.dart';
+import 'package:hiddify/features/auth/ui/login_page.dart';
+import 'package:hiddify/features/auth/ui/register_page.dart';
+import 'package:hiddify/features/package/model/package_models.dart';
+import 'package:hiddify/features/package/ui/packages_page.dart';
+import 'package:hiddify/features/package/ui/payment_page.dart';
 import 'package:hiddify/features/settings/about/about_page.dart';
 import 'package:hiddify/features/settings/overview/settings_overview_page.dart';
 import 'package:hiddify/utils/utils.dart';
@@ -158,6 +165,87 @@ class IntroRoute extends GoRouteData {
       name: name,
       child: IntroPage(),
     );
+  }
+}
+
+@TypedGoRoute<LoginRoute>(path: "/login", name: LoginRoute.name)
+class LoginRoute extends GoRouteData {
+  const LoginRoute();
+  static const name = "Login";
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return MaterialPage(
+      fullscreenDialog: true,
+      name: name,
+      child: const LoginPage(),
+    );
+  }
+}
+
+@TypedGoRoute<RegisterRoute>(path: "/register", name: RegisterRoute.name)
+class RegisterRoute extends GoRouteData {
+  const RegisterRoute();
+  static const name = "Register";
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return MaterialPage(
+      fullscreenDialog: true,
+      name: name,
+      child: const RegisterPage(),
+    );
+  }
+}
+
+@TypedGoRoute<ForgotPasswordRoute>(path: "/forgot-password", name: ForgotPasswordRoute.name)
+class ForgotPasswordRoute extends GoRouteData {
+  const ForgotPasswordRoute();
+  static const name = "Forgot Password";
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return MaterialPage(
+      fullscreenDialog: true,
+      name: name,
+      child: const ForgotPasswordPage(),
+    );
+  }
+}
+
+@TypedGoRoute<ChangePasswordRoute>(path: "/change-password", name: ChangePasswordRoute.name)
+class ChangePasswordRoute extends GoRouteData {
+  const ChangePasswordRoute();
+  static const name = "Change Password";
+
+  static final GlobalKey<NavigatorState> $parentNavigatorKey = rootNavigatorKey;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    return MaterialPage(
+      fullscreenDialog: true,
+      name: name,
+      child: const ChangePasswordPage(),
+    );
+  }
+}
+
+@TypedGoRoute<PackagesRoute>(path: "/packages", name: PackagesRoute.name)
+class PackagesRoute extends GoRouteData {
+  const PackagesRoute();
+  static const name = "Packages";
+
+  static final GlobalKey<NavigatorState>? $parentNavigatorKey = _dynamicRootKey;
+
+  @override
+  Page<void> buildPage(BuildContext context, GoRouterState state) {
+    if (useMobileRouter) {
+      return const MaterialPage(
+        name: name,
+        child: PackagesPage(),
+      );
+    }
+    return const NoTransitionPage(name: name, child: PackagesPage());
   }
 }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hiddify/core/preferences/general_preferences.dart';
 import 'package:hiddify/core/router/routes.dart';
+import 'package:hiddify/features/auth/data/auth_data_providers.dart';
 import 'package:hiddify/features/deep_link/notifier/deep_link_notifier.dart';
 import 'package:hiddify/utils/utils.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -12,8 +13,7 @@ part 'app_router.g.dart';
 
 bool _debugMobileRouter = false;
 
-final useMobileRouter =
-    !PlatformUtils.isDesktop || (kDebugMode && _debugMobileRouter);
+final useMobileRouter = !PlatformUtils.isDesktop || (kDebugMode && _debugMobileRouter);
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 // TODO: test and improve handling of deep link
@@ -41,6 +41,12 @@ GoRouter router(RouterRef ref) {
     routes: [
       if (useMobileRouter) $mobileWrapperRoute else $desktopWrapperRoute,
       $introRoute,
+      $loginRoute,
+      $registerRoute,
+      $forgotPasswordRoute,
+      $changePasswordRoute,
+      $packagesRoute,
+      // PaymentRoute 需要手动处理
     ],
     refreshListenable: notifier,
     redirect: notifier.redirect,
@@ -77,9 +83,7 @@ void switchTab(int index, BuildContext context) {
 }
 
 @riverpod
-class RouterListenable extends _$RouterListenable
-    with AppLogger
-    implements Listenable {
+class RouterListenable extends _$RouterListenable with AppLogger implements Listenable {
   VoidCallback? _routerListener;
   bool _introCompleted = false;
 
@@ -99,6 +103,15 @@ class RouterListenable extends _$RouterListenable
     // if (this.state.isLoading || this.state.hasError) return null;
 
     final isIntro = state.uri.path == const IntroRoute().location;
+    final isLogin = state.uri.path == const LoginRoute().location;
+    final isRegister = state.uri.path == const RegisterRoute().location;
+    final isForgotPassword = state.uri.path == const ForgotPasswordRoute().location;
+    final isChangePassword = state.uri.path == const ChangePasswordRoute().location;
+
+    // 认证相关页面不需要检查登录状态
+    if (isLogin || isRegister || isForgotPassword || isChangePassword) {
+      return null;
+    }
 
     if (!_introCompleted) {
       return const IntroRoute().location;
@@ -106,6 +119,8 @@ class RouterListenable extends _$RouterListenable
       return const HomeRoute().location;
     }
 
+    // 登录检查在登录页面进行，如果未登录会自动显示登录页面
+    // 如果已登录，登录页面会自动跳转到主页
     return null;
   }
 
