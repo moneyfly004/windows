@@ -17,11 +17,20 @@ class SettingsOverviewPage extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(translationsProvider);
     final isAuthenticatedAsync = ref.watch(isAuthenticatedProvider);
-    // 正确处理异步认证状态：使用 AsyncValue 的 when 方法
-    // 但需要等待数据加载完成，所以使用 whenData 或者直接等待
-    final isAuthenticated = isAuthenticatedAsync.maybeWhen(
-      data: (value) => value,
-      orElse: () => false, // 加载中或出错时先不显示
+    // 正确处理异步认证状态：直接使用 valueOrNull，如果为 null 则默认为 false
+    // 但这样会导致加载中时菜单项不显示，所以我们需要等待加载完成
+    // 使用 when 方法明确处理所有状态
+    final isAuthenticated = isAuthenticatedAsync.when(
+      data: (value) => value ?? false,
+      loading: () {
+        // 加载中时，尝试从 repository 同步获取（如果可能）
+        // 但为了安全，先返回 false，等待异步加载完成
+        return false;
+      },
+      error: (error, stack) {
+        // 出错时返回 false
+        return false;
+      },
     );
 
     return Scaffold(
