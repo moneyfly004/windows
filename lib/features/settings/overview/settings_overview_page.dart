@@ -16,7 +16,8 @@ class SettingsOverviewPage extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(translationsProvider);
-    final isAuthenticated = ref.watch(isAuthenticatedProvider);
+    final isAuthenticatedAsync = ref.watch(isAuthenticatedProvider);
+    final isAuthenticated = isAuthenticatedAsync.value ?? false;
 
     return Scaffold(
       body: CustomScrollView(
@@ -34,7 +35,7 @@ class SettingsOverviewPage extends HookConsumerWidget {
               const AdvancedSettingTiles(),
               const SettingsDivider(),
               // 套餐购买（放在关于上面）
-              if (isAuthenticated.value ?? false) ...[
+              if (isAuthenticated) ...[
                 ListTile(
                   leading: Icon(FluentIcons.cart_24_regular),
                   title: const Text('套餐购买'),
@@ -55,7 +56,7 @@ class SettingsOverviewPage extends HookConsumerWidget {
                 },
               ),
               // 修改密码
-              if (isAuthenticated.value ?? false) ...[
+              if (isAuthenticated) ...[
                 const SettingsDivider(),
                 ListTile(
                   leading: Icon(FluentIcons.key_24_regular),
@@ -67,7 +68,7 @@ class SettingsOverviewPage extends HookConsumerWidget {
                 ),
               ],
               // 退出登录（放在修改密码下面）
-              if (isAuthenticated.value ?? false) ...[
+              if (isAuthenticated) ...[
                 const SettingsDivider(),
                 ListTile(
                   leading: const Icon(FluentIcons.sign_out_24_regular),

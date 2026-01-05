@@ -4,13 +4,13 @@ import 'package:gap/gap.dart';
 import 'package:hiddify/core/localization/translations.dart';
 import 'package:hiddify/core/router/router.dart';
 import 'package:hiddify/features/auth/data/auth_data_providers.dart';
+import 'package:hiddify/features/auth/notifier/subscription_update_notifier.dart';
 import 'package:hiddify/features/auth/ui/register_page.dart';
 import 'package:hiddify/features/profile/data/profile_data_providers.dart';
 import 'package:hiddify/features/profile/model/profile_entity.dart';
 import 'package:hiddify/utils/utils.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:hiddify/utils/custom_loggers.dart';
 
 class LoginPage extends HookConsumerWidget with AppLogger {
   const LoginPage({super.key});
@@ -332,6 +332,10 @@ class LoginPage extends HookConsumerWidget with AppLogger {
                                           );
                                           // 刷新认证状态
                                           ref.invalidate(isAuthenticatedProvider);
+                                          // 触发订阅更新（异步执行，不阻塞导航）
+                                          Future.microtask(() {
+                                            ref.read(subscriptionUpdateNotifierProvider.notifier).updateSubscription();
+                                          });
                                           // 导航到主页
                                           const HomeRoute().go(context);
                                         }

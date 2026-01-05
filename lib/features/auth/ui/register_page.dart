@@ -98,7 +98,13 @@ class RegisterPage extends HookConsumerWidget {
                             border: OutlineInputBorder(),
                           ),
                           keyboardType: TextInputType.number,
-                          enabled: !isLoading.value && countdown.value == 0,
+                          enabled: !isLoading.value,
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return '请输入验证码';
+                            }
+                            return null;
+                          },
                         ),
                       ),
                       const Gap(8),
