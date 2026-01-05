@@ -37,8 +37,24 @@ jobs:
 
       - name: Setup dependencies
         run: |
+          # 安装 Visual Studio 构建工具（如果需要）
+          Write-Host "Checking Visual Studio build tools..."
+          if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
+            Write-Host "⚠ CMake not found, but continuing..."
+          }
+          
+          # 安装 flutter_distributor
           dart pub global activate flutter_distributor
+          
+          # 确保 PATH 包含 pub cache
+          $env:PATH = "$env:PATH;$env:USERPROFILE\.pub-cache\bin"
+          
+          # 获取依赖
+          Write-Host "Getting Flutter dependencies..."
           flutter pub get
+          
+          # 升级依赖（可选）
+          Write-Host "Upgrading Flutter dependencies..."
           flutter pub upgrade
 
       - name: Prepare for Windows build
@@ -78,14 +94,41 @@ jobs:
           Write-Host "=== Starting Windows Build ==="
           Write-Host "SENTRY_DSN: $(if ($env:SENTRY_DSN) { 'Set' } else { 'Not set' })"
           Write-Host "CHANNEL: $env:CHANNEL"
+          Write-Host "Flutter version:"
+          flutter --version
+          Write-Host "Flutter doctor:"
+          flutter doctor -v
+          
+          # 检查 Windows 桌面支持
+          Write-Host "Checking Windows desktop support..."
+          flutter config --enable-windows-desktop
           
           # 首先尝试直接构建（更可靠）
           Write-Host "Building with Flutter directly..."
-          flutter build windows --target lib/main_prod.dart --dart-define sentry_dsn=$env:SENTRY_DSN --release
+          $buildExitCode = 0
+          flutter build windows --target lib/main_prod.dart --dart-define sentry_dsn=$env:SENTRY_DSN --release 2>&1 | Tee-Object -Variable buildOutput
+          $buildExitCode = $LASTEXITCODE
+          
+          Write-Host "=== Build Output ==="
+          Write-Host $buildOutput
+          
+          if ($buildExitCode -ne 0) {
+            Write-Error "Flutter build failed with exit code: $buildExitCode"
+            Write-Host "Build output:"
+            Write-Host $buildOutput
+            exit $buildExitCode
+          }
           
           # 检查构建是否成功
           if (-not (Test-Path "build\windows\x64\runner\Release")) {
             Write-Error "Flutter build failed: build directory not found"
+            Write-Host "Current directory: $(Get-Location)"
+            Write-Host "Build directory check:"
+            if (Test-Path "build\windows") {
+              Get-ChildItem -Path "build\windows" -Recurse | Select-Object FullName
+            } else {
+              Write-Host "build\windows directory does not exist"
+            }
             exit 1
           }
           
@@ -95,10 +138,16 @@ jobs:
           if (Get-Command flutter_distributor -ErrorAction SilentlyContinue) {
             Write-Host "Packaging with flutter_distributor..."
             try {
-              flutter_distributor package --flutter-build-args=verbose --platform windows --targets exe,msix --skip-clean --build-target lib/main_prod.dart --build-dart-define sentry_dsn=$env:SENTRY_DSN
-              Write-Host "✓ flutter_distributor packaging completed"
+              $distributorOutput = flutter_distributor package --flutter-build-args=verbose --platform windows --targets exe,msix --skip-clean --build-target lib/main_prod.dart --build-dart-define sentry_dsn=$env:SENTRY_DSN 2>&1
+              Write-Host $distributorOutput
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "✓ flutter_distributor packaging completed"
+              } else {
+                Write-Host "⚠ flutter_distributor packaging failed, but build directory exists"
+              }
             } catch {
-              Write-Host "⚠ flutter_distributor packaging failed, but build directory exists"
+              Write-Host "⚠ flutter_distributor packaging failed: $_"
+              Write-Host "But build directory exists, continuing..."
             }
           } else {
             Write-Host "⚠ flutter_distributor not available, skipping packaging"
