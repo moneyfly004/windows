@@ -1,22 +1,23 @@
-import 'package:dartx/dartx.dart';
 import 'package:hiddify/core/model/environment.dart';
 import 'package:hiddify/features/app_update/model/remote_version_entity.dart';
 
 abstract class GithubReleaseParser {
   static RemoteVersionEntity parse(Map<String, dynamic> json) {
     final fullTag = json['tag_name'] as String;
-    final fullVersion = fullTag.removePrefix("v").split("-").first.split("+");
+    // 使用标准 Dart 方法替代 dartx
+    final tagWithoutV = fullTag.startsWith("v") ? fullTag.substring(1) : fullTag;
+    final fullVersion = tagWithoutV.split("-").first.split("+");
     var version = fullVersion.first;
-    var buildNumber = fullVersion.elementAtOrElse(1, (index) => "");
+    var buildNumber = fullVersion.length > 1 ? fullVersion[1] : "";
     var flavor = Environment.prod;
     for (final env in Environment.values) {
       final suffix = ".${env.name}";
       if (version.endsWith(suffix)) {
-        version = version.removeSuffix(suffix);
+        version = version.substring(0, version.length - suffix.length);
         flavor = env;
         break;
       } else if (buildNumber.endsWith(suffix)) {
-        buildNumber = buildNumber.removeSuffix(suffix);
+        buildNumber = buildNumber.substring(0, buildNumber.length - suffix.length);
         flavor = env;
         break;
       }
