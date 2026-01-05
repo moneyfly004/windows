@@ -124,10 +124,10 @@ jobs:
       - name: Copy APK files
         run: |
           mkdir -p out
-          cp build/app/outputs/flutter-apk/*arm64-v8a*.apk out/Hiddify-Android-arm64.apk 2>/dev/null || echo "no arm64 apk"
-          cp build/app/outputs/flutter-apk/*armeabi-v7a*.apk out/Hiddify-Android-arm7.apk 2>/dev/null || echo "no arm7 apk"
-          cp build/app/outputs/flutter-apk/*x86_64*.apk out/Hiddify-Android-x86_64.apk 2>/dev/null || echo "no x64 apk"
-          cp build/app/outputs/flutter-apk/app-release.apk out/Hiddify-Android-universal.apk 2>/dev/null || echo "no universal apk"
+          cp build/app/outputs/flutter-apk/*arm64-v8a*.apk out/Moneyfly-Android-arm64.apk 2>/dev/null || echo "no arm64 apk"
+          cp build/app/outputs/flutter-apk/*armeabi-v7a*.apk out/Moneyfly-Android-arm7.apk 2>/dev/null || echo "no arm7 apk"
+          cp build/app/outputs/flutter-apk/*x86_64*.apk out/Moneyfly-Android-x86_64.apk 2>/dev/null || echo "no x64 apk"
+          cp build/app/outputs/flutter-apk/app-release.apk out/Moneyfly-Android-universal.apk 2>/dev/null || echo "no universal apk"
           ls -lh out/
 
       - name: Upload APK artifacts
@@ -174,10 +174,10 @@ jobs:
             ## Android Release ${{ steps.get_version.outputs.version }}
             
             ### Downloads
-            - **Universal APK**: [Hiddify-Android-universal.apk](./Hiddify-Android-universal.apk)
-            - **ARM64 APK**: [Hiddify-Android-arm64.apk](./Hiddify-Android-arm64.apk)
-            - **ARMv7 APK**: [Hiddify-Android-arm7.apk](./Hiddify-Android-arm7.apk)
-            - **x86_64 APK**: [Hiddify-Android-x86_64.apk](./Hiddify-Android-x86_64.apk)
+            - **Universal APK**: [Moneyfly-Android-universal.apk](./Moneyfly-Android-universal.apk)
+            - **ARM64 APK**: [Moneyfly-Android-arm64.apk](./Moneyfly-Android-arm64.apk)
+            - **ARMv7 APK**: [Moneyfly-Android-arm7.apk](./Moneyfly-Android-arm7.apk)
+            - **x86_64 APK**: [Moneyfly-Android-x86_64.apk](./Moneyfly-Android-x86_64.apk)
             
             ### Changes
             - Fixed AAR package name validation
