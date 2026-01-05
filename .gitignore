@@ -60,6 +60,7 @@ app.*.map.json
 /data
 
 # Android signing
+key.properties
 android/key.properties
 *.jks
 *.keystore
