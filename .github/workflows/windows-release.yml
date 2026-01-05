@@ -205,7 +205,7 @@ jobs:
           
           $filesCopied = $false
           
-          # 优先使用 ZIP 文件（便携版，包含所有文件）
+          # 查找 dist 目录中的文件
           if (Test-Path "dist") {
             Write-Host "Checking dist directory..."
             $distFiles = Get-ChildItem -Path "dist" -Recurse -File
@@ -214,30 +214,41 @@ jobs:
                 Write-Host "Found file: $($_.FullName) ($([math]::Round($_.Length/1MB, 2)) MB)"
               }
               
-              # 优先查找 ZIP 文件（便携版）
+              # 1. 查找安装程序 EXE（优先）
+              $setupExeFiles = Get-ChildItem -Path "dist" -Recurse -Filter "*windows-setup.exe"
+              if ($setupExeFiles) {
+                $setupExeFiles | ForEach-Object {
+                  $fileSizeMB = [math]::Round($_.Length/1MB, 2)
+                  Write-Host "Found setup EXE: $($_.Name) ($fileSizeMB MB)"
+                  Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-Setup-x64-$version.exe" -Force
+                  Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-Setup-x64-$version.exe"
+                  $filesCopied = $true
+                }
+              }
+              
+              # 2. 查找 ZIP 文件（便携版）
               $zipFiles = Get-ChildItem -Path "dist" -Recurse -Filter "*.zip"
               if ($zipFiles) {
                 $zipFiles | ForEach-Object {
                   $fileSizeMB = [math]::Round($_.Length/1MB, 2)
                   Write-Host "Found ZIP file: $($_.Name) ($fileSizeMB MB)"
-                  Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.zip" -Force
-                  Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.zip"
+                  Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-Portable-x64-$version.zip" -Force
+                  Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-Portable-x64-$version.zip"
                   $filesCopied = $true
                 }
               }
               
-              # 如果没有 ZIP，再查找 MSIX（安装包）
-              if (-not $filesCopied) {
-                Get-ChildItem -Path "dist" -Recurse -Filter "*.msix" | ForEach-Object {
+              # 3. 查找 MSIX（Microsoft Store 格式）
+              $msixFiles = Get-ChildItem -Path "dist" -Recurse -Filter "*.msix"
+              if ($msixFiles) {
+                $msixFiles | ForEach-Object {
+                  $fileSizeMB = [math]::Round($_.Length/1MB, 2)
+                  Write-Host "Found MSIX file: $($_.Name) ($fileSizeMB MB)"
                   Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.msix" -Force
                   Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.msix"
                   $filesCopied = $true
                 }
               }
-              
-              # 最后才考虑单独的 exe（可能是安装程序，不包含所有文件）
-              # 注意：单独的 exe 文件通常只是安装程序，不是完整的便携版
-              # 所以这里不复制单独的 exe，而是使用 build 目录创建完整的 ZIP
             } else {
               Write-Host "⚠ Dist directory exists but is empty"
             }
@@ -275,7 +286,7 @@ jobs:
                 }
                 
                 # 验证关键文件是否存在
-                $requiredFiles = @("Hiddify.exe", "libcore.dll", "flutter_windows.dll", "data\flutter_assets\AssetManifest.json")
+                $requiredFiles = @("Moneyfly.exe", "libcore.dll", "flutter_windows.dll", "data\flutter_assets\AssetManifest.json")
                 $missingFiles = @()
                 foreach ($reqFile in $requiredFiles) {
                   $fullPath = Join-Path "build\windows\x64\runner\Release" $reqFile
@@ -292,13 +303,13 @@ jobs:
                 }
                 
                 # 确保包含所有子目录（data 目录等）
-                Write-Host "Creating ZIP archive from build directory..."
-                Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-x64-$version.zip" -Force -CompressionLevel Optimal
+                Write-Host "Creating ZIP archive from build directory (portable version)..."
+                Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-Portable-x64-$version.zip" -Force -CompressionLevel Optimal
                 
                 # 验证 ZIP 文件大小
-                $zipFile = Get-Item "out\Moneyfly-Windows-x64-$version.zip"
+                $zipFile = Get-Item "out\Moneyfly-Windows-Portable-x64-$version.zip"
                 $zipSizeMB = [math]::Round($zipFile.Length/1MB, 2)
-                Write-Host "✓ Created Moneyfly-Windows-x64-$version.zip ($zipSizeMB MB)"
+                Write-Host "✓ Created Moneyfly-Windows-Portable-x64-$version.zip ($zipSizeMB MB)"
                 
                 if ($zipSizeMB -lt 50) {
                   Write-Host "⚠ Warning: ZIP file size ($zipSizeMB MB) seems too small. Expected ~90-100 MB."
@@ -379,15 +390,28 @@ jobs:
             ## Windows Release ${{ steps.get_version.outputs.version }}
             
             ### Downloads
-            - **Windows x64**: [Moneyfly-Windows-x64-${{ steps.get_version.outputs.version }}.zip](./Moneyfly-Windows-x64-${{ steps.get_version.outputs.version }}.zip)
+            - **Windows Setup (Installer)**: [Moneyfly-Windows-Setup-x64-${{ steps.get_version.outputs.version }}.exe](./Moneyfly-Windows-Setup-x64-${{ steps.get_version.outputs.version }}.exe)
+              - Double-click to install
+              - Creates desktop shortcut
+              - Installs to Program Files
+            - **Windows Portable**: [Moneyfly-Windows-Portable-x64-${{ steps.get_version.outputs.version }}.zip](./Moneyfly-Windows-Portable-x64-${{ steps.get_version.outputs.version }}.zip)
+              - Extract and run directly
+              - No installation required
             
             ### Installation
+            **Using Setup (Recommended):**
+            1. Download the `.exe` installer
+            2. Double-click to run
+            3. Follow the installation wizard
+            4. Launch from desktop shortcut or Start menu
+            
+            **Using Portable:**
             1. Download the ZIP file
             2. Extract to a folder
-            3. Run `moneyfly.exe` (or the main executable)
+            3. Run `Moneyfly.exe`
             
             ### Changes
-            - Windows release build
+            - Windows release build with installer support
           files: ./out/*
           draft: false
           prerelease: false

@@ -52,7 +52,13 @@ CloseApplications=force
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: {% if CREATE_DESKTOP_ICON != true %}unchecked{% else %}checkedonce{% endif %}
 Name: "launchAtStartup"; Description: "{cm:AutoStartProgram,{{DISPLAY_NAME}}}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: {% if LAUNCH_AT_STARTUP != true %}unchecked{% else %}checkedonce{% endif %}
 [Files]
+; 包含所有文件和子目录（包括可执行文件、DLL、data 目录等）
 Source: "{{SOURCE_DIR}}\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; 确保包含所有必要的文件：
+; - Moneyfly.exe (主程序)
+; - libcore.dll, flutter_windows.dll 等 DLL 文件
+; - data\ 目录（包含 Flutter 资源文件）
+; - 所有其他必要的运行时文件
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
@@ -68,8 +74,8 @@ function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
 begin
-  Exec('taskkill', '/F /IM hiddify.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
-  Exec('net', 'stop "HiddifyTunnelService"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
-  Exec('sc.exe', 'delete "HiddifyTunnelService"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
+  Exec('taskkill', '/F /IM Moneyfly.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
+  Exec('net', 'stop "MoneyflyTunnelService"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
+  Exec('sc.exe', 'delete "MoneyflyTunnelService"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
   Result := True;
 end;
