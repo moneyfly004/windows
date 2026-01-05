@@ -58,3 +58,9 @@ app.*.map.json
 
 
 /data
+
+# Android signing
+android/key.properties
+*.jks
+*.keystore
+moneyfly-release-key.jks
