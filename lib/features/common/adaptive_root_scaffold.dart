@@ -24,22 +24,9 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
 
   int _getSelectedIndex(BuildContext context, bool isAuthenticated) {
     final String location = GoRouterState.of(context).uri.path;
-
-    // 基础路由映射（使用 startsWith 以支持子路由）
-    if (location.startsWith(const ConfigOptionsRoute().location)) return 0;
-    if (location.startsWith(const SettingsRoute().location)) return 1;
-    if (location.startsWith(const LogsOverviewRoute().location)) return 2;
-
-    // 认证相关路由（仅在登录时）
-    if (isAuthenticated) {
-      if (location.startsWith(const PackagesRoute().location)) return 3;
-      if (location.startsWith(const ChangePasswordRoute().location)) return 4;
-      if (location.startsWith(const AboutRoute().location)) return 5;
-    } else {
-      if (location.startsWith(const AboutRoute().location)) return 3;
-    }
-
-    return 0; // 默认返回第一个
+    
+    // 使用原来的 getCurrentIndex 函数来获取正确的索引
+    return getCurrentIndex(context);
   }
 
   @override
@@ -54,8 +41,16 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
 
     final selectedIndex = _getSelectedIndex(context, isAuthenticated);
 
-    // 基础菜单项：配置选项、设置、日志、关于
+    // 原来的 destinations 列表：主页、代理、配置选项、设置、日志、关于
     final baseDestinations = [
+      NavigationDestination(
+        icon: const Icon(FluentIcons.power_20_filled),
+        label: t.home.pageTitle,
+      ),
+      NavigationDestination(
+        icon: const Icon(FluentIcons.filter_20_filled),
+        label: t.proxies.pageTitle,
+      ),
       NavigationDestination(
         icon: const Icon(FluentIcons.box_edit_20_filled),
         label: t.config.pageTitle,
@@ -68,9 +63,13 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
         icon: const Icon(FluentIcons.document_text_20_filled),
         label: t.logs.pageTitle,
       ),
+      NavigationDestination(
+        icon: const Icon(FluentIcons.info_20_filled),
+        label: t.about.pageTitle,
+      ),
     ];
 
-    // 如果已登录，添加认证相关菜单项
+    // 如果已登录，在设置和日志之间插入认证相关菜单项
     final authDestinations = isAuthenticated
         ? [
             NavigationDestination(
@@ -84,13 +83,7 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
           ]
         : <NavigationDestination>[];
 
-    // 关于菜单项
-    final aboutDestination = NavigationDestination(
-      icon: const Icon(FluentIcons.info_20_filled),
-      label: t.about.pageTitle,
-    );
-
-    // 如果已登录，添加退出登录菜单项
+    // 如果已登录，在关于后面添加退出登录菜单项
     final logoutDestination = isAuthenticated
         ? NavigationDestination(
             icon: const Icon(FluentIcons.sign_out_20_filled),
@@ -98,23 +91,33 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
           )
         : null;
 
-    // 组合所有菜单项
+    // 组合所有菜单项：主页(0), 代理(1), 配置选项(2), 设置(3), [套餐购买(4), 修改密码(5)], 日志(6), 关于(7), [退出登录(8)]
     final destinations = [
-      ...baseDestinations,
-      ...authDestinations,
-      aboutDestination,
-      if (logoutDestination != null) logoutDestination,
+      baseDestinations[0], // 主页
+      baseDestinations[1], // 代理
+      baseDestinations[2], // 配置选项
+      baseDestinations[3], // 设置
+      ...authDestinations, // 套餐购买、修改密码（如果已登录）
+      baseDestinations[4], // 日志
+      baseDestinations[5], // 关于
+      if (logoutDestination != null) logoutDestination, // 退出登录（如果已登录）
     ];
 
     return _CustomAdaptiveScaffold(
       selectedIndex: selectedIndex,
       onSelectedIndexChange: (index) {
         RootScaffold.stateKey.currentState?.closeDrawer();
-        _handleMenuSelection(index, context, ref, isAuthenticated);
+        // 如果是底部导航栏（索引0-1），使用原来的 switchTab
+        if (index < 2) {
+          switchTab(index, context);
+        } else {
+          // 其他菜单项使用自定义处理
+          _handleMenuSelection(index, context, ref, isAuthenticated);
+        }
       },
       destinations: destinations,
-      drawerDestinationRange: useMobileRouter ? (0, null) : (0, null),
-      bottomDestinationRange: (0, 2),
+      drawerDestinationRange: useMobileRouter ? (2, null) : (0, null), // 抽屉菜单从配置选项开始（索引2）
+      bottomDestinationRange: (0, 2), // 底部导航栏显示主页(0)和代理(1)
       useBottomSheet: useMobileRouter,
       sidebarTrailing: const Expanded(
         child: Align(
@@ -132,26 +135,31 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
     WidgetRef ref,
     bool isAuthenticated,
   ) {
-    // 菜单项顺序：配置选项(0), 设置(1), 日志(2), 套餐购买(3), 修改密码(4), 关于(5), 退出登录(6)
+    // 菜单项顺序：主页(0), 代理(1), 配置选项(2), 设置(3), [套餐购买(4), 修改密码(5)], 日志(6), 关于(7), [退出登录(8)]
     switch (index) {
       case 0:
-        const ConfigOptionsRoute().go(context);
+        // 主页 - 由 switchTab 处理
+        const HomeRoute().go(context);
         break;
       case 1:
-        const SettingsRoute().go(context);
+        // 代理 - 由 switchTab 处理
+        const ProxiesRoute().go(context);
         break;
       case 2:
-        const LogsOverviewRoute().go(context);
+        const ConfigOptionsRoute().go(context);
         break;
       case 3:
+        const SettingsRoute().go(context);
+        break;
+      case 4:
         if (isAuthenticated) {
           const PackagesRoute().push(context);
         } else {
-          // 如果未登录，这个索引可能是关于
-          const AboutRoute().go(context);
+          // 如果未登录，这个索引是日志
+          const LogsOverviewRoute().go(context);
         }
         break;
-      case 4:
+      case 5:
         if (isAuthenticated) {
           const ChangePasswordRoute().push(context);
         } else {
@@ -159,14 +167,21 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
           const AboutRoute().go(context);
         }
         break;
-      case 5:
+      case 6:
+        if (isAuthenticated) {
+          const LogsOverviewRoute().go(context);
+        } else {
+          // 如果未登录，这个索引不存在
+        }
+        break;
+      case 7:
         if (isAuthenticated) {
           const AboutRoute().go(context);
         } else {
           // 如果未登录，这个索引不存在
         }
         break;
-      case 6:
+      case 8:
         if (isAuthenticated) {
           // 退出登录
           _handleLogout(context, ref);
