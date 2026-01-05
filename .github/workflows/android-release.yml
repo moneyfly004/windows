@@ -1,0 +1,160 @@
+name: Android Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+env:
+  FLUTTER_VERSION: '3.24.0'
+  NDK_VERSION: r26d
+  CHANNEL: prod
+
+jobs:
+  build-android-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2.16.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 17
+
+      - name: Setup NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: true
+          link-to-sdk: true
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 7.5
+
+      - name: Setup dependencies
+        run: |
+          make android-apk-install-dependencies
+
+      - name: Prepare for Android APK
+        run: |
+          make android-apk-prepare
+          tree android/app/libs/ || echo "libs directory check"
+
+      - name: Verify AAR file
+        run: |
+          if [ -f android/app/libs/libcore.aar ]; then
+            echo "✓ AAR file exists"
+            ls -lh android/app/libs/libcore.aar
+            # 验证包名
+            TEMP_DIR=$(mktemp -d)
+            unzip -q android/app/libs/libcore.aar -d "$TEMP_DIR" 2>/dev/null || true
+            if [ -f "$TEMP_DIR/classes.jar" ]; then
+              if jar tf "$TEMP_DIR/classes.jar" 2>/dev/null | grep -q "io/nekohasekai/libbox"; then
+                echo "✓ AAR package name verified: io.nekohasekai"
+              else
+                echo "✗ AAR package name mismatch!"
+                jar tf "$TEMP_DIR/classes.jar" 2>/dev/null | grep -E "nekohasekai|hiddify/core" | head -5
+                exit 1
+              fi
+            fi
+            rm -rf "$TEMP_DIR"
+          else
+            echo "✗ AAR file not found!"
+            exit 1
+          fi
+
+      - name: Build Android APK
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: |
+          make android-apk-release
+          ls -R build/app/outputs/flutter-apk/ || echo "APK output check"
+
+      - name: Copy APK files
+        run: |
+          mkdir -p out
+          cp build/app/outputs/flutter-apk/*arm64-v8a*.apk out/Hiddify-Android-arm64.apk 2>/dev/null || echo "no arm64 apk"
+          cp build/app/outputs/flutter-apk/*armeabi-v7a*.apk out/Hiddify-Android-arm7.apk 2>/dev/null || echo "no arm7 apk"
+          cp build/app/outputs/flutter-apk/*x86_64*.apk out/Hiddify-Android-x86_64.apk 2>/dev/null || echo "no x64 apk"
+          cp build/app/outputs/flutter-apk/app-release.apk out/Hiddify-Android-universal.apk 2>/dev/null || echo "no universal apk"
+          ls -lh out/
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: out/*.apk
+          retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build-android-apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: ./out
+
+      - name: Get version tag
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: ${{ steps.get_version.outputs.version }}
+          body: |
+            ## Android Release ${{ steps.get_version.outputs.version }}
+            
+            ### Downloads
+            - **Universal APK**: [Hiddify-Android-universal.apk](./Hiddify-Android-universal.apk)
+            - **ARM64 APK**: [Hiddify-Android-arm64.apk](./Hiddify-Android-arm64.apk)
+            - **ARMv7 APK**: [Hiddify-Android-arm7.apk](./Hiddify-Android-arm7.apk)
+            - **x86_64 APK**: [Hiddify-Android-x86_64.apk](./Hiddify-Android-x86_64.apk)
+            
+            ### Changes
+            - Fixed AAR package name validation
+            - Automatic fallback to production AAR version if package name mismatch
+          files: ./out/*.apk
+          draft: false
+          prerelease: false
+
