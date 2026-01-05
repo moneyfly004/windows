@@ -23,6 +23,37 @@ abstract class GithubReleaseParser {
     }
     final preRelease = json["prerelease"] as bool;
     final publishedAt = DateTime.parse(json["published_at"] as String);
+    
+    // 查找 APK 下载链接（Android）
+    String? apkDownloadUrl;
+    if (json["assets"] != null) {
+      final assets = json["assets"] as List;
+      // 优先查找 release APK
+      final apkAsset = assets.firstWhere(
+        (asset) {
+          final name = (asset as Map<String, dynamic>)["name"] as String;
+          return name.endsWith(".apk") && 
+                 (name.contains("release") || name.contains("moneyfly"));
+        },
+        orElse: () => null,
+      );
+      if (apkAsset != null) {
+        apkDownloadUrl = (apkAsset as Map<String, dynamic>)["browser_download_url"] as String;
+      } else {
+        // 如果没有找到 release APK，查找任何 APK
+        final anyApkAsset = assets.firstWhere(
+          (asset) {
+            final name = (asset as Map<String, dynamic>)["name"] as String;
+            return name.endsWith(".apk");
+          },
+          orElse: () => null,
+        );
+        if (anyApkAsset != null) {
+          apkDownloadUrl = (anyApkAsset as Map<String, dynamic>)["browser_download_url"] as String;
+        }
+      }
+    }
+    
     return RemoteVersionEntity(
       version: version,
       buildNumber: buildNumber,
@@ -31,6 +62,7 @@ abstract class GithubReleaseParser {
       url: json["html_url"] as String,
       publishedAt: publishedAt,
       flavor: flavor,
+      apkDownloadUrl: apkDownloadUrl,
     );
   }
 }

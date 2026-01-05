@@ -1,11 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hiddify/core/localization/translations.dart';
+import 'package:hiddify/core/model/platform_utils.dart';
 import 'package:hiddify/features/app_update/model/remote_version_entity.dart';
 import 'package:hiddify/features/app_update/notifier/app_update_notifier.dart';
 import 'package:hiddify/utils/utils.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class NewVersionDialog extends HookConsumerWidget with PresLogger {
   NewVersionDialog(
@@ -92,7 +95,25 @@ class NewVersionDialog extends HookConsumerWidget with PresLogger {
         ),
         TextButton(
           onPressed: () async {
-            await UriUtils.tryLaunch(Uri.parse(newVersion.url));
+            // 如果是 Android 且有 APK 下载链接，直接下载并安装
+            if (PlatformUtils.isAndroid && newVersion.apkDownloadUrl != null) {
+              try {
+                final uri = Uri.parse(newVersion.apkDownloadUrl!);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                } else {
+                  // 如果无法直接打开，则打开 GitHub Release 页面
+                  await UriUtils.tryLaunch(Uri.parse(newVersion.url));
+                }
+              } catch (e) {
+                loggy.warning("Failed to launch APK download URL", e);
+                // 失败时打开 GitHub Release 页面
+                await UriUtils.tryLaunch(Uri.parse(newVersion.url));
+              }
+            } else {
+              // 其他平台或没有 APK 链接时，打开 GitHub Release 页面
+              await UriUtils.tryLaunch(Uri.parse(newVersion.url));
+            }
           },
           child: Text(t.appUpdate.updateNowBtnTxt),
         ),

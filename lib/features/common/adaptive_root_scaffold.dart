@@ -24,7 +24,7 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
 
   int _getSelectedIndex(BuildContext context, bool isAuthenticated) {
     final String location = GoRouterState.of(context).uri.path;
-    
+
     // 使用原来的 getCurrentIndex 函数来获取正确的索引
     return getCurrentIndex(context);
   }
