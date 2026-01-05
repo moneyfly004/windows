@@ -63,16 +63,21 @@ jobs:
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "Setting up keystore from GitHub Secrets..."
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > moneyfly-release-key.jks
-            mkdir -p android
-            cat > android/key.properties << EOF
+            cat > key.properties << EOF
           storePassword=${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.KEY_PASSWORD }}
           keyAlias=${{ secrets.KEY_ALIAS }}
-          storeFile=../moneyfly-release-key.jks
+          storeFile=moneyfly-release-key.jks
           EOF
             chmod 600 moneyfly-release-key.jks
+            chmod 644 key.properties
             echo "✓ Keystore configured successfully"
-            ls -la android/key.properties
+            echo "Keystore file:"
+            ls -la moneyfly-release-key.jks
+            echo "Key properties file:"
+            ls -la key.properties
+            echo "Key properties content:"
+            cat key.properties
           else
             echo "⚠ No keystore configured. APK will be signed with debug key."
             echo "To enable release signing, configure KEYSTORE_BASE64 in GitHub Secrets."
