@@ -29,7 +29,8 @@ GoRouter router(RouterRef ref) {
     },
   );
   final initialLink = deepLink.read();
-  String initialLocation = const HomeRoute().location;
+  // 默认初始位置为登录页，redirect 方法会根据登录状态决定跳转
+  String initialLocation = const LoginRoute().location;
   if (initialLink case AsyncData(value: final link?)) {
     initialLocation = AddProfileRoute(url: link.url).location;
   }
@@ -99,7 +100,7 @@ class RouterListenable extends _$RouterListenable with AppLogger implements List
   }
 
 // ignore: avoid_build_context_in_providers
-  String? redirect(BuildContext context, GoRouterState state) {
+  Future<String?> redirect(BuildContext context, GoRouterState state) async {
     // if (this.state.isLoading || this.state.hasError) return null;
 
     final isIntro = state.uri.path == const IntroRoute().location;
@@ -107,20 +108,41 @@ class RouterListenable extends _$RouterListenable with AppLogger implements List
     final isRegister = state.uri.path == const RegisterRoute().location;
     final isForgotPassword = state.uri.path == const ForgotPasswordRoute().location;
     final isChangePassword = state.uri.path == const ChangePasswordRoute().location;
+    final isPackages = state.uri.path == const PackagesRoute().location;
 
-    // 认证相关页面不需要检查登录状态
-    if (isLogin || isRegister || isForgotPassword || isChangePassword) {
+    // 认证相关页面和套餐购买页面不需要检查登录状态（套餐购买页面内部会检查）
+    if (isLogin || isRegister || isForgotPassword || isChangePassword || isPackages) {
       return null;
     }
 
     if (!_introCompleted) {
       return const IntroRoute().location;
     } else if (isIntro) {
-      return const HomeRoute().location;
+      // 介绍页完成后，检查登录状态
+      try {
+        final authRepo = await ref.read(authRepositoryProvider.future);
+        if (authRepo.isAuthenticated()) {
+          return const HomeRoute().location;
+        } else {
+          return const LoginRoute().location;
+        }
+      } catch (e) {
+        return const LoginRoute().location;
+      }
     }
 
-    // 登录检查在登录页面进行，如果未登录会自动显示登录页面
-    // 如果已登录，登录页面会自动跳转到主页
+    // 检查登录状态
+    try {
+      final authRepo = await ref.read(authRepositoryProvider.future);
+      if (!authRepo.isAuthenticated()) {
+        // 未登录，重定向到登录页
+        return const LoginRoute().location;
+      }
+    } catch (e) {
+      // 如果检查失败，也重定向到登录页
+      return const LoginRoute().location;
+    }
+
     return null;
   }
 
