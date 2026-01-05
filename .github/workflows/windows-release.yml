@@ -269,15 +269,13 @@ jobs:
                 Get-ChildItem -Path "dist" -Recurse -File | Select-Object Name, Length, FullName | Format-Table -AutoSize
               }
               
-              # 2. 查找 ZIP 文件（便携版）
+              # 2. 查找 ZIP 文件（便携版）- 仅用于信息，实际会从 build 目录创建完整版本
               $zipFiles = Get-ChildItem -Path "dist" -Recurse -Filter "*.zip"
               if ($zipFiles) {
                 $zipFiles | ForEach-Object {
                   $fileSizeMB = [math]::Round($_.Length/1MB, 2)
-                  Write-Host "Found ZIP file: $($_.Name) ($fileSizeMB MB)"
-                  Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-Portable-x64-$version.zip" -Force
-                  Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-Portable-x64-$version.zip"
-                  $filesCopied = $true
+                  Write-Host "Found ZIP file in dist: $($_.Name) ($fileSizeMB MB)"
+                  Write-Host "Note: Will create complete portable ZIP from build directory to ensure all files are included"
                 }
               }
               
@@ -297,73 +295,133 @@ jobs:
             }
           }
           
-          # 如果没有从 dist 目录找到合适的文件，使用 build 目录创建完整的 ZIP
-          if (-not $filesCopied) {
-            if (Test-Path "build\windows\x64\runner\Release") {
-              Write-Host "Using build directory..."
+          # 始终从 build 目录创建完整的便携版 ZIP（确保包含所有文件）
+          Write-Host "=== Creating Portable ZIP from build directory ==="
+          if (Test-Path "build\windows\x64\runner\Release") {
+            Write-Host "Using build directory to create complete portable ZIP..."
+            
+            # 确保 libcore 文件已复制
+            if (Test-Path "libcore\bin") {
+              Write-Host "Ensuring libcore files are in build directory..."
+              $libcoreFiles = Get-ChildItem -Path "libcore\bin" -File
+              foreach ($file in $libcoreFiles) {
+                $destPath = "build\windows\x64\runner\Release\$($file.Name)"
+                if (-not (Test-Path $destPath)) {
+                  Copy-Item $file.FullName -Destination $destPath -Force
+                  Write-Host "✓ Copied $($file.Name) to build directory"
+                }
+              }
+            }
+            
+            # 检查构建目录内容
+            Write-Host "Checking build directory contents..."
+            $buildFiles = Get-ChildItem -Path "build\windows\x64\runner\Release" -File -Recurse
+            $buildDirs = Get-ChildItem -Path "build\windows\x64\runner\Release" -Directory -Recurse
+            
+            if ($buildFiles) {
+              Write-Host "Found $($buildFiles.Count) files and $($buildDirs.Count) directories in build directory"
+              $totalSize = ($buildFiles | Measure-Object -Property Length -Sum).Sum
+              Write-Host "Total size: $([math]::Round($totalSize/1MB, 2)) MB"
               
-              # 确保 libcore 文件已复制
-              if (Test-Path "libcore\bin") {
-                Write-Host "Ensuring libcore files are in build directory..."
-                $libcoreFiles = Get-ChildItem -Path "libcore\bin" -File
-                foreach ($file in $libcoreFiles) {
-                  $destPath = "build\windows\x64\runner\Release\$($file.Name)"
-                  if (-not (Test-Path $destPath)) {
-                    Copy-Item $file.FullName -Destination $destPath -Force
-                    Write-Host "✓ Copied $($file.Name) to build directory"
-                  }
+              # 列出主要文件和目录
+              Write-Host "Main files (>1MB):"
+              $buildFiles | Where-Object { $_.Length -gt 1MB } | ForEach-Object {
+                Write-Host "  - $($_.FullName.Replace('build\windows\x64\runner\Release\', '')) ($([math]::Round($_.Length/1MB, 2)) MB)"
+              }
+              
+              Write-Host "Directories:"
+              $buildDirs | ForEach-Object {
+                $dirFileCount = (Get-ChildItem -Path $_.FullName -File -Recurse -ErrorAction SilentlyContinue).Count
+                Write-Host "  - $($_.FullName.Replace('build\windows\x64\runner\Release\', '')) ($dirFileCount files)"
+              }
+              
+              # 验证关键文件是否存在
+              $requiredFiles = @("Moneyfly.exe", "libcore.dll", "flutter_windows.dll", "data\flutter_assets\AssetManifest.json")
+              $missingFiles = @()
+              foreach ($reqFile in $requiredFiles) {
+                $fullPath = Join-Path "build\windows\x64\runner\Release" $reqFile
+                if (-not (Test-Path $fullPath)) {
+                  $missingFiles += $reqFile
                 }
               }
               
-              # 检查构建目录内容
-              Write-Host "Checking build directory contents..."
-              $buildFiles = Get-ChildItem -Path "build\windows\x64\runner\Release" -File -Recurse
-              if ($buildFiles) {
-                Write-Host "Found $($buildFiles.Count) files in build directory"
-                $totalSize = ($buildFiles | Measure-Object -Property Length -Sum).Sum
-                Write-Host "Total size: $([math]::Round($totalSize/1MB, 2)) MB"
+              if ($missingFiles.Count -gt 0) {
+                Write-Host "⚠ Warning: Missing required files:"
+                $missingFiles | ForEach-Object { Write-Host "    - $_" }
+              } else {
+                Write-Host "✓ All required files present"
+              }
+              
+              # 创建完整的便携版 ZIP（包含所有文件和目录）
+              Write-Host "Creating complete portable ZIP archive from build directory..."
+              Write-Host "This will include:"
+              Write-Host "  - Moneyfly.exe (main executable)"
+              Write-Host "  - All DLL files (libcore.dll, flutter_windows.dll, etc.)"
+              Write-Host "  - data\ directory (Flutter assets)"
+              Write-Host "  - All other necessary files and directories"
+              
+              # 使用 -Recurse 确保包含所有子目录和文件
+              $zipPath = "out\Moneyfly-Windows-Portable-x64-$version.zip"
+              if (Test-Path $zipPath) {
+                Remove-Item $zipPath -Force
+                Write-Host "Removed existing ZIP file"
+              }
+              
+              # 压缩整个 Release 目录，确保包含所有内容
+              Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath $zipPath -Force -CompressionLevel Optimal
+              
+              # 验证 ZIP 文件
+              if (Test-Path $zipPath) {
+                $zipFile = Get-Item $zipPath
+                $zipSizeMB = [math]::Round($zipFile.Length/1MB, 2)
+                Write-Host "✓ Created Moneyfly-Windows-Portable-x64-$version.zip ($zipSizeMB MB)"
                 
-                # 列出主要文件
-                $buildFiles | Where-Object { $_.Length -gt 1MB } | ForEach-Object {
-                  Write-Host "  - $($_.FullName.Replace('build\windows\x64\runner\Release\', '')) ($([math]::Round($_.Length/1MB, 2)) MB)"
-                }
+                # 验证 ZIP 内容
+                Write-Host "Verifying ZIP contents..."
+                Add-Type -AssemblyName System.IO.Compression.FileSystem
+                $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+                $zipEntries = $zip.Entries
+                Write-Host "ZIP contains $($zipEntries.Count) files/directories"
                 
-                # 验证关键文件是否存在
-                $requiredFiles = @("Moneyfly.exe", "libcore.dll", "flutter_windows.dll", "data\flutter_assets\AssetManifest.json")
-                $missingFiles = @()
-                foreach ($reqFile in $requiredFiles) {
-                  $fullPath = Join-Path "build\windows\x64\runner\Release" $reqFile
-                  if (-not (Test-Path $fullPath)) {
-                    $missingFiles += $reqFile
+                # 检查关键文件是否在 ZIP 中
+                $zipFileNames = $zipEntries | ForEach-Object { $_.FullName }
+                $requiredInZip = @("Moneyfly.exe", "libcore.dll", "flutter_windows.dll", "data/flutter_assets/AssetManifest.json")
+                $missingInZip = @()
+                foreach ($req in $requiredInZip) {
+                  if ($zipFileNames -notcontains $req) {
+                    $missingInZip += $req
                   }
                 }
                 
-                if ($missingFiles.Count -gt 0) {
-                  Write-Host "⚠ Warning: Missing required files:"
-                  $missingFiles | ForEach-Object { Write-Host "    - $_" }
+                if ($missingInZip.Count -gt 0) {
+                  Write-Host "⚠ Warning: Missing files in ZIP:"
+                  $missingInZip | ForEach-Object { Write-Host "    - $_" }
                 } else {
-                  Write-Host "✓ All required files present"
+                  Write-Host "✓ All required files are in ZIP"
                 }
                 
-                # 确保包含所有子目录（data 目录等）
-                Write-Host "Creating ZIP archive from build directory (portable version)..."
-                Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-Portable-x64-$version.zip" -Force -CompressionLevel Optimal
+                # 检查 data 目录
+                $dataFiles = $zipFileNames | Where-Object { $_ -like "data/*" }
+                Write-Host "Data directory contains $($dataFiles.Count) files"
                 
-                # 验证 ZIP 文件大小
-                $zipFile = Get-Item "out\Moneyfly-Windows-Portable-x64-$version.zip"
-                $zipSizeMB = [math]::Round($zipFile.Length/1MB, 2)
-                Write-Host "✓ Created Moneyfly-Windows-Portable-x64-$version.zip ($zipSizeMB MB)"
+                $zip.Dispose()
                 
                 if ($zipSizeMB -lt 50) {
                   Write-Host "⚠ Warning: ZIP file size ($zipSizeMB MB) seems too small. Expected ~90-100 MB."
                   Write-Host "Please verify that all files (including data directory) are included."
+                } else {
+                  Write-Host "✓ ZIP file size looks good"
                 }
                 
                 $filesCopied = $true
               } else {
-                Write-Host "⚠ Build directory exists but is empty"
+                Write-Error "Failed to create ZIP file"
               }
+            } else {
+              Write-Host "⚠ Build directory exists but is empty"
             }
+          } else {
+            Write-Host "⚠ Build directory not found: build\windows\x64\runner\Release"
           }
           
           if (-not $filesCopied) {
