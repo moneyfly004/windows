@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:hiddify/core/localization/translations.dart';
 import 'package:hiddify/core/router/router.dart';
-import 'package:hiddify/features/auth/data/auth_data_providers.dart';
 import 'package:hiddify/features/common/nested_app_bar.dart';
 import 'package:hiddify/features/settings/about/about_page.dart';
 import 'package:hiddify/features/settings/widgets/widgets.dart';
-import 'package:hiddify/utils/utils.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 class SettingsOverviewPage extends HookConsumerWidget {
@@ -16,22 +14,6 @@ class SettingsOverviewPage extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(translationsProvider);
-    final isAuthenticatedAsync = ref.watch(isAuthenticatedProvider);
-    // 正确处理异步认证状态：直接使用 valueOrNull，如果为 null 则默认为 false
-    // 但这样会导致加载中时菜单项不显示，所以我们需要等待加载完成
-    // 使用 when 方法明确处理所有状态
-    final isAuthenticated = isAuthenticatedAsync.when(
-      data: (value) => value ?? false,
-      loading: () {
-        // 加载中时，尝试从 repository 同步获取（如果可能）
-        // 但为了安全，先返回 false，等待异步加载完成
-        return false;
-      },
-      error: (error, stack) {
-        // 出错时返回 false
-        return false;
-      },
-    );
 
     return Scaffold(
       body: CustomScrollView(
@@ -48,18 +30,6 @@ class SettingsOverviewPage extends HookConsumerWidget {
               SettingsSection(t.settings.advanced.sectionTitle),
               const AdvancedSettingTiles(),
               const SettingsDivider(),
-              // 套餐购买（放在关于上面）
-              if (isAuthenticated) ...[
-                ListTile(
-                  leading: Icon(FluentIcons.cart_24_regular),
-                  title: const Text('套餐购买'),
-                  trailing: const Icon(FluentIcons.chevron_right_24_regular),
-                  onTap: () {
-                    const PackagesRoute().push(context);
-                  },
-                ),
-                const SettingsDivider(),
-              ],
               // 关于
               ListTile(
                 leading: const Icon(FluentIcons.info_24_regular),
@@ -69,85 +39,6 @@ class SettingsOverviewPage extends HookConsumerWidget {
                   const AboutRoute().push(context);
                 },
               ),
-              // 修改密码
-              if (isAuthenticated) ...[
-                const SettingsDivider(),
-                ListTile(
-                  leading: Icon(FluentIcons.key_24_regular),
-                  title: const Text('修改密码'),
-                  trailing: const Icon(FluentIcons.chevron_right_24_regular),
-                  onTap: () {
-                    const ChangePasswordRoute().push(context);
-                  },
-                ),
-              ],
-              // 退出登录（放在修改密码下面）
-              if (isAuthenticated) ...[
-                const SettingsDivider(),
-                ListTile(
-                  leading: const Icon(FluentIcons.sign_out_24_regular),
-                  title: const Text('退出登录'),
-                  onTap: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('确认退出'),
-                        content: const Text('确定要退出登录吗？'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            child: const Text('取消'),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            child: const Text('确定'),
-                          ),
-                        ],
-                      ),
-                    );
-
-                    if (confirmed == true && context.mounted) {
-                      try {
-                        final repository = await ref.read(authRepositoryProvider.future);
-                        final result = await repository.logout().run();
-
-                        result.fold(
-                          (failure) {
-                            if (context.mounted) {
-                              showToast(
-                                context,
-                                failure.message,
-                                type: ToastType.error,
-                              );
-                            }
-                          },
-                          (_) {
-                            // 刷新认证状态
-                            ref.invalidate(isAuthenticatedProvider);
-                            if (context.mounted) {
-                              showToast(
-                                context,
-                                '已退出登录',
-                                type: ToastType.success,
-                              );
-                              // 跳转到登录页
-                              const LoginRoute().go(context);
-                            }
-                          },
-                        );
-                      } catch (e) {
-                        if (context.mounted) {
-                          showToast(
-                            context,
-                            '退出登录失败: $e',
-                            type: ToastType.error,
-                          );
-                        }
-                      }
-                    }
-                  },
-                ),
-              ],
               const Gap(16),
             ],
           ),

@@ -14,8 +14,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 abstract interface class RootScaffold {
   static final stateKey = GlobalKey<ScaffoldState>();
 
-  static bool canShowDrawer(BuildContext context) =>
-      Breakpoints.small.isActive(context);
+  static bool canShowDrawer(BuildContext context) => Breakpoints.small.isActive(context);
 }
 
 class AdaptiveRootScaffold extends HookConsumerWidget {
@@ -26,18 +25,18 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
   int _getSelectedIndex(BuildContext context, bool isAuthenticated) {
     final String location = GoRouterState.of(context).uri.path;
     
-    // 基础路由映射
-    if (location == const ConfigOptionsRoute().location) return 0;
-    if (location == const SettingsRoute().location) return 1;
-    if (location == const LogsOverviewRoute().location) return 2;
+    // 基础路由映射（使用 startsWith 以支持子路由）
+    if (location.startsWith(const ConfigOptionsRoute().location)) return 0;
+    if (location.startsWith(const SettingsRoute().location)) return 1;
+    if (location.startsWith(const LogsOverviewRoute().location)) return 2;
     
     // 认证相关路由（仅在登录时）
     if (isAuthenticated) {
-      if (location == const PackagesRoute().location) return 3;
-      if (location == const ChangePasswordRoute().location) return 4;
-      if (location == const AboutRoute().location) return 5;
+      if (location.startsWith(const PackagesRoute().location)) return 3;
+      if (location.startsWith(const ChangePasswordRoute().location)) return 4;
+      if (location.startsWith(const AboutRoute().location)) return 5;
     } else {
-      if (location == const AboutRoute().location) return 3;
+      if (location.startsWith(const AboutRoute().location)) return 3;
     }
     
     return 0; // 默认返回第一个
@@ -260,18 +259,14 @@ class _CustomAdaptiveScaffold extends HookConsumerWidget {
   final Widget? sidebarTrailing;
   final Widget body;
 
-  List<NavigationDestination> destinationsSlice((int, int?) range) =>
-      destinations.sublist(range.$1, range.$2);
+  List<NavigationDestination> destinationsSlice((int, int?) range) => destinations.sublist(range.$1, range.$2);
 
   int? selectedWithOffset((int, int?) range) {
     final index = selectedIndex - range.$1;
-    return index < 0 || (range.$2 != null && index > (range.$2! - 1))
-        ? null
-        : index;
+    return index < 0 || (range.$2 != null && index > (range.$2! - 1)) ? null : index;
   }
 
-  void selectWithOffset(int index, (int, int?) range) =>
-      onSelectedIndexChange(index + range.$1);
+  void selectWithOffset(int index, (int, int?) range) => onSelectedIndexChange(index + range.$1);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -283,11 +278,8 @@ class _CustomAdaptiveScaffold extends HookConsumerWidget {
               child: NavigationRail(
                 extended: true,
                 selectedIndex: selectedWithOffset(drawerDestinationRange),
-                destinations: destinationsSlice(drawerDestinationRange)
-                    .map((dest) => AdaptiveScaffold.toRailDestination(dest))
-                    .toList(),
-                onDestinationSelected: (index) =>
-                    selectWithOffset(index, drawerDestinationRange),
+                destinations: destinationsSlice(drawerDestinationRange).map((dest) => AdaptiveScaffold.toRailDestination(dest)).toList(),
+                onDestinationSelected: (index) => selectWithOffset(index, drawerDestinationRange),
               ),
             )
           : null,
@@ -298,9 +290,7 @@ class _CustomAdaptiveScaffold extends HookConsumerWidget {
               key: const Key('primaryNavigation'),
               builder: (_) => AdaptiveScaffold.standardNavigationRail(
                 selectedIndex: selectedIndex,
-                destinations: destinations
-                    .map((dest) => AdaptiveScaffold.toRailDestination(dest))
-                    .toList(),
+                destinations: destinations.map((dest) => AdaptiveScaffold.toRailDestination(dest)).toList(),
                 onDestinationSelected: onSelectedIndexChange,
               ),
             ),
@@ -309,9 +299,7 @@ class _CustomAdaptiveScaffold extends HookConsumerWidget {
               builder: (_) => AdaptiveScaffold.standardNavigationRail(
                 extended: true,
                 selectedIndex: selectedIndex,
-                destinations: destinations
-                    .map((dest) => AdaptiveScaffold.toRailDestination(dest))
-                    .toList(),
+                destinations: destinations.map((dest) => AdaptiveScaffold.toRailDestination(dest)).toList(),
                 onDestinationSelected: onSelectedIndexChange,
                 trailing: sidebarTrailing,
               ),
@@ -334,8 +322,7 @@ class _CustomAdaptiveScaffold extends HookConsumerWidget {
           ? NavigationBar(
               selectedIndex: selectedWithOffset(bottomDestinationRange) ?? 0,
               destinations: destinationsSlice(bottomDestinationRange),
-              onDestinationSelected: (index) =>
-                  selectWithOffset(index, bottomDestinationRange),
+              onDestinationSelected: (index) => selectWithOffset(index, bottomDestinationRange),
             )
           : null,
     );
