@@ -54,7 +54,19 @@ class SettingsOverviewPage extends HookConsumerWidget {
                   const AboutRoute().push(context);
                 },
               ),
-              // 退出登录（放在关于下面）
+              // 修改密码
+              if (isAuthenticated.value ?? false) ...[
+                const SettingsDivider(),
+                ListTile(
+                  leading: Icon(FluentIcons.key_24_regular),
+                  title: const Text('修改密码'),
+                  trailing: const Icon(FluentIcons.chevron_right_24_regular),
+                  onTap: () {
+                    const ChangePasswordRoute().push(context);
+                  },
+                ),
+              ],
+              // 退出登录（放在修改密码下面）
               if (isAuthenticated.value ?? false) ...[
                 const SettingsDivider(),
                 ListTile(
@@ -118,18 +130,6 @@ class SettingsOverviewPage extends HookConsumerWidget {
                         }
                       }
                     }
-                  },
-                ),
-              ],
-              // 修改密码
-              if (isAuthenticated.value ?? false) ...[
-                const SettingsDivider(),
-                ListTile(
-                  leading: Icon(FluentIcons.key_24_regular),
-                  title: const Text('修改密码'),
-                  trailing: const Icon(FluentIcons.chevron_right_24_regular),
-                  onTap: () {
-                    const ChangePasswordRoute().push(context);
                   },
                 ),
               ],
