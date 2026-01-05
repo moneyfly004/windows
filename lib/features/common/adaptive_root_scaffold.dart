@@ -24,12 +24,12 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
 
   int _getSelectedIndex(BuildContext context, bool isAuthenticated) {
     final String location = GoRouterState.of(context).uri.path;
-    
+
     // 基础路由映射（使用 startsWith 以支持子路由）
     if (location.startsWith(const ConfigOptionsRoute().location)) return 0;
     if (location.startsWith(const SettingsRoute().location)) return 1;
     if (location.startsWith(const LogsOverviewRoute().location)) return 2;
-    
+
     // 认证相关路由（仅在登录时）
     if (isAuthenticated) {
       if (location.startsWith(const PackagesRoute().location)) return 3;
@@ -38,7 +38,7 @@ class AdaptiveRootScaffold extends HookConsumerWidget {
     } else {
       if (location.startsWith(const AboutRoute().location)) return 3;
     }
-    
+
     return 0; // 默认返回第一个
   }
 
