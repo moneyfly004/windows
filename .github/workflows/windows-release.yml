@@ -37,6 +37,7 @@ jobs:
 
       - name: Setup dependencies
         run: |
+          dart pub global activate flutter_distributor
           flutter pub get
           flutter pub upgrade
 
@@ -45,13 +46,18 @@ jobs:
           $env:CHANNEL = "prod"
           flutter config --enable-windows-desktop
           flutter doctor -v
+          make windows-prepare
 
       - name: Build Windows
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          CHANNEL: prod
         run: |
-          flutter build windows --target lib/main_prod.dart --dart-define sentry_dsn=$env:SENTRY_DSN --release
+          make windows-release
           echo "=== Build output check ==="
+          if (Test-Path "dist") {
+            Get-ChildItem -Path "dist" -Recurse | Select-Object FullName, Length
+          }
           if (Test-Path "build\windows\x64\runner\Release") {
             Get-ChildItem -Path "build\windows\x64\runner\Release" -Recurse | Select-Object FullName, Length
           }
@@ -65,16 +71,26 @@ jobs:
           }
           $version = $version -replace '^v', ''
           
-          # 复制整个 Release 目录
-          if (Test-Path "build\windows\x64\runner\Release") {
-            Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-x64-$version.zip" -Force
-            echo "✓ Created Moneyfly-Windows-x64-$version.zip"
+          # 优先使用 flutter_distributor 生成的包
+          if (Test-Path "dist") {
+            Get-ChildItem -Path "dist" -Filter "*.exe" | ForEach-Object {
+              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.exe"
+              echo "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.exe"
+            }
+            Get-ChildItem -Path "dist" -Filter "*.msix" | ForEach-Object {
+              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.msix"
+              echo "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.msix"
+            }
+            Get-ChildItem -Path "dist" -Filter "*.zip" | ForEach-Object {
+              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.zip"
+              echo "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.zip"
+            }
           }
           
-          # 也创建一个包含所有文件的目录结构
-          if (Test-Path "build\windows\x64\runner\Release") {
-            Copy-Item -Path "build\windows\x64\runner\Release\*" -Destination "out\Moneyfly-Windows-x64-$version\" -Recurse -Force
-            echo "✓ Copied files to out\Moneyfly-Windows-x64-$version\"
+          # 如果没有 dist 目录，使用 build 目录
+          if (-not (Test-Path "dist") -and (Test-Path "build\windows\x64\runner\Release")) {
+            Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-x64-$version.zip" -Force
+            echo "✓ Created Moneyfly-Windows-x64-$version.zip from build directory"
           }
           
           Get-ChildItem -Path "out" | Select-Object Name, Length
