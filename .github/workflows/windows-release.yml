@@ -126,6 +126,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    if: success() || failure()  # 即使构建失败也运行，以便查看错误
     
     steps:
       - name: Checkout
@@ -136,6 +137,18 @@ jobs:
         with:
           name: windows-release
           path: ./out
+          if-no-files-found: warn  # 如果找不到文件，只警告不失败
+
+      - name: Check artifacts
+        run: |
+          if [ -d "./out" ] && [ "$(ls -A ./out 2>/dev/null)" ]; then
+            echo "✓ Artifacts found:"
+            ls -lh ./out/
+          else
+            echo "⚠ No artifacts found. Build may have failed."
+            echo "Please check the build-windows job logs for errors."
+            exit 1
+          fi
 
       - name: Get version tag
         id: get_version
@@ -149,6 +162,7 @@ jobs:
           echo "Release version: $VERSION"
 
       - name: Create Release
+        if: success() && hashFiles('./out/**') != ''
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.get_version.outputs.version }}
