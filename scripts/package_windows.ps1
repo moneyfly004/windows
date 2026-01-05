@@ -9,6 +9,17 @@ Get-ChildItem -Recurse -File -Path "dist" -Filter "*windows.msix" | Copy-Item -D
 
 
 # windows portable
+# 确保 libcore 文件已复制到构建输出目录
+if (Test-Path "libcore\bin") {
+    Write-Host "Copying libcore files to build directory..."
+    $libcoreFiles = Get-ChildItem -Path "libcore\bin" -File
+    foreach ($file in $libcoreFiles) {
+        $destPath = "build\windows\x64\runner\Release\$($file.Name)"
+        Copy-Item $file.FullName -Destination $destPath -Force
+        Write-Host "✓ Copied $($file.Name)"
+    }
+}
+
 xcopy "build\windows\x64\runner\Release" "dist\tmp\hiddify-next" /E/H/C/I/Y
 xcopy ".github\help\mac-windows\*.url" "dist\tmp\hiddify-next" /E/H/C/I/Y
 Compress-Archive -Force -Path "dist\tmp\hiddify-next" -DestinationPath "out\Hiddify-Windows-Portable-x64.zip" -ErrorAction SilentlyContinue
