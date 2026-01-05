@@ -29,9 +29,7 @@ class AuthFailure {
   AuthFailure(this.message);
 }
 
-class AuthRepositoryImpl
-    with ExceptionHandler, InfraLogger
-    implements AuthRepository {
+class AuthRepositoryImpl with ExceptionHandler, InfraLogger implements AuthRepository {
   AuthRepositoryImpl({
     required this.sharedPreferences,
   });
@@ -402,4 +400,3 @@ class AuthRepositoryImpl
     }
   }
 }
-
