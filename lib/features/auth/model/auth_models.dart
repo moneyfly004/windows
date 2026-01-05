@@ -67,9 +67,9 @@ class UserInfo with _$UserInfo {
 @freezed
 class UserSubscription with _$UserSubscription {
   const factory UserSubscription({
-    required String universalUrl,
+    @Default('') String universalUrl,
     String? subscriptionUrl,
-    required String expireTime,
+    @Default('') String expireTime,
     @Default(0) int deviceLimit,
     @Default(0) int currentDevices,
     @Default(0) int uploadTraffic,

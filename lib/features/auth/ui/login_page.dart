@@ -155,6 +155,7 @@ class LoginPage extends HookConsumerWidget with AppLogger {
 
                                     subscriptionResult.fold(
                                       (failure) {
+                                        loggy.error('登录后获取订阅失败: ${failure.message}');
                                         if (context.mounted) {
                                           showToast(
                                             context,
@@ -168,6 +169,7 @@ class LoginPage extends HookConsumerWidget with AppLogger {
                                         }
                                       },
                                       (subscription) async {
+                                        loggy.info('登录后获取到订阅: URL=${subscription.universalUrl}, 到期=${subscription.expireTime}');
                                         // 自动添加订阅到配置
                                         if (subscription.universalUrl.isNotEmpty) {
                                           try {

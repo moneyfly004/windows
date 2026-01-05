@@ -305,19 +305,37 @@ class AuthRepositoryImpl
             ),
           );
 
+          loggy.debug('获取订阅API响应: ${response.data}');
           if (response.data['success'] == true) {
             final data = response.data['data'] as Map<String, dynamic>;
-            final subscription = UserSubscription.fromJson(data);
-            loggy.info('获取订阅成功: ${subscription.expireTime}');
+            loggy.debug('订阅数据: $data');
+            // 处理可能为 null 的字段
+            final safeData = <String, dynamic>{
+              'universalUrl': data['universal_url'] ?? data['universalUrl'] ?? '',
+              'subscriptionUrl': data['subscription_url'] ?? data['subscriptionUrl'],
+              'expireTime': data['expire_time'] ?? data['expireTime'] ?? '',
+              'deviceLimit': data['device_limit'] ?? data['deviceLimit'] ?? 0,
+              'currentDevices': data['current_devices'] ?? data['currentDevices'] ?? 0,
+              'uploadTraffic': data['upload_traffic'] ?? data['uploadTraffic'] ?? 0,
+              'downloadTraffic': data['download_traffic'] ?? data['downloadTraffic'] ?? 0,
+              'totalTraffic': data['total_traffic'] ?? data['totalTraffic'] ?? 0,
+            };
+            loggy.debug('处理后的订阅数据: $safeData');
+            final subscription = UserSubscription.fromJson(safeData);
+            loggy.info('获取订阅成功: ${subscription.expireTime}, URL: ${subscription.universalUrl}');
+            if (subscription.universalUrl.isEmpty) {
+              loggy.warning('订阅URL为空');
+            }
             return right(subscription);
           } else {
             final message = (response.data['message'] as String?) ?? '获取订阅失败';
-            loggy.error('获取订阅失败: $message');
+            loggy.error('获取订阅失败: $message, 响应: ${response.data}');
             return left(AuthFailure(message));
           }
         } catch (e, stackTrace) {
           loggy.error('获取订阅异常', e, stackTrace);
           if (e is DioException) {
+            loggy.error('Dio异常详情: status=${e.response?.statusCode}, data=${e.response?.data}');
             final message = (e.response?.data['message'] as String?) ?? '获取订阅失败，请检查网络连接';
             return left(AuthFailure(message));
           }
