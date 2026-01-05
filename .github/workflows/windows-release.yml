@@ -153,23 +153,46 @@ jobs:
             Write-Host "⚠ libcore\bin directory not found"
           }
           
-          # 如果 flutter_distributor 可用，尝试打包
-          if (Get-Command flutter_distributor -ErrorAction SilentlyContinue) {
-            Write-Host "Packaging with flutter_distributor..."
-            try {
-              $distributorOutput = flutter_distributor package --flutter-build-args=verbose --platform windows --targets exe,msix --skip-clean --build-target lib/main_prod.dart --build-dart-define sentry_dsn=$env:SENTRY_DSN 2>&1
-              Write-Host $distributorOutput
-              if ($LASTEXITCODE -eq 0) {
-                Write-Host "✓ flutter_distributor packaging completed"
-              } else {
-                Write-Host "⚠ flutter_distributor packaging failed, but build directory exists"
-              }
-            } catch {
-              Write-Host "⚠ flutter_distributor packaging failed: $_"
-              Write-Host "But build directory exists, continuing..."
-            }
+          # 确保 flutter_distributor 可用并打包
+          Write-Host "=== Setting up flutter_distributor ==="
+          dart pub global activate flutter_distributor
+          $env:PATH = "$env:PATH;$env:USERPROFILE\.pub-cache\bin"
+          
+          # 验证 flutter_distributor 是否可用
+          $distributorPath = Get-Command flutter_distributor -ErrorAction SilentlyContinue
+          if ($distributorPath) {
+            Write-Host "✓ flutter_distributor found at: $($distributorPath.Source)"
+            Write-Host "Version:"
+            flutter_distributor --version
           } else {
-            Write-Host "⚠ flutter_distributor not available, skipping packaging"
+            Write-Host "⚠ flutter_distributor not found in PATH"
+            Write-Host "Current PATH: $env:PATH"
+            Write-Host "Trying to find in pub cache..."
+            $pubCachePath = "$env:USERPROFILE\.pub-cache\bin\flutter_distributor.bat"
+            if (Test-Path $pubCachePath) {
+              Write-Host "✓ Found flutter_distributor at: $pubCachePath"
+              $env:PATH = "$env:PATH;$env:USERPROFILE\.pub-cache\bin"
+            } else {
+              Write-Error "flutter_distributor not found. Cannot create installer."
+              exit 1
+            }
+          }
+          
+          # 使用 flutter_distributor 打包（生成安装程序和便携版）
+          Write-Host "=== Packaging with flutter_distributor ==="
+          Write-Host "Targets: exe,msix (installer and portable)"
+          try {
+            $distributorOutput = flutter_distributor package --flutter-build-args=verbose --platform windows --targets exe,msix --skip-clean --build-target lib/main_prod.dart --build-dart-define sentry_dsn=$env:SENTRY_DSN 2>&1
+            Write-Host $distributorOutput
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "flutter_distributor packaging failed with exit code: $LASTEXITCODE"
+              Write-Host "Output: $distributorOutput"
+              exit $LASTEXITCODE
+            }
+            Write-Host "✓ flutter_distributor packaging completed successfully"
+          } catch {
+            Write-Error "flutter_distributor packaging failed: $_"
+            exit 1
           }
           
           Write-Host "=== Build output check ==="
@@ -215,15 +238,35 @@ jobs:
               }
               
               # 1. 查找安装程序 EXE（优先）
-              $setupExeFiles = Get-ChildItem -Path "dist" -Recurse -Filter "*windows-setup.exe"
+              # flutter_distributor 生成的安装程序可能有不同的命名模式
+              Write-Host "Searching for setup EXE files..."
+              $setupExeFiles = Get-ChildItem -Path "dist" -Recurse -Filter "*setup*.exe"
+              if (-not $setupExeFiles) {
+                $setupExeFiles = Get-ChildItem -Path "dist" -Recurse -Filter "*windows*.exe"
+              }
+              if (-not $setupExeFiles) {
+                # 查找所有 .exe 文件（排除可能的临时文件，且文件大小 > 1MB）
+                $allExeFiles = Get-ChildItem -Path "dist" -Recurse -Filter "*.exe"
+                Write-Host "All EXE files found:"
+                $allExeFiles | ForEach-Object {
+                  Write-Host "  - $($_.Name) ($([math]::Round($_.Length/1MB, 2)) MB) at $($_.FullName)"
+                }
+                $setupExeFiles = $allExeFiles | Where-Object { 
+                  $_.Name -notmatch "temp|tmp|test" -and $_.Length -gt 1MB 
+                }
+              }
               if ($setupExeFiles) {
                 $setupExeFiles | ForEach-Object {
                   $fileSizeMB = [math]::Round($_.Length/1MB, 2)
-                  Write-Host "Found setup EXE: $($_.Name) ($fileSizeMB MB)"
+                  Write-Host "Found setup EXE: $($_.Name) ($fileSizeMB MB) at $($_.FullName)"
                   Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-Setup-x64-$version.exe" -Force
                   Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-Setup-x64-$version.exe"
                   $filesCopied = $true
                 }
+              } else {
+                Write-Host "⚠ No setup EXE found in dist directory"
+                Write-Host "Searching in dist directory:"
+                Get-ChildItem -Path "dist" -Recurse -File | Select-Object Name, Length, FullName | Format-Table -AutoSize
               }
               
               # 2. 查找 ZIP 文件（便携版）
