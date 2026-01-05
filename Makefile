@@ -173,16 +173,20 @@ android-libs:
 	@AAR_FILE=$$(find $(ANDROID_OUT) -name "*.aar" -type f | head -1) && \
 	if [ -n "$$AAR_FILE" ]; then \
 		TEMP_DIR=$$(mktemp -d) && \
-		unzip -q "$$AAR_FILE" -d $$TEMP_DIR 2>/dev/null && \
-		if ! jar tf $$TEMP_DIR/classes.jar 2>/dev/null | grep -q "io/nekohasekai/libbox"; then \
-			echo "警告: 下载的 AAR 文件包名不匹配 (不是 io.nekohasekai)，尝试使用生产版本..."; \
-			rm -f $(ANDROID_OUT)/*.aar; \
-			curl -L https://github.com/hiddify/hiddify-next-core/releases/download/v$(core.version)/$(CORE_NAME)-android.tar.gz | tar xz -C $(ANDROID_OUT)/; \
-			echo "已切换到生产版本 v$(core.version)"; \
+		unzip -q "$$AAR_FILE" -d $$TEMP_DIR 2>/dev/null || true && \
+		if [ -f $$TEMP_DIR/classes.jar ]; then \
+			JAR_CMD=$$(which jar 2>/dev/null || echo "jar"); \
+			if $$JAR_CMD tf $$TEMP_DIR/classes.jar 2>/dev/null | grep -q "io/nekohasekai/libbox"; then \
+				echo "✓ AAR 文件包名验证通过 (io.nekohasekai)"; \
+			else \
+				echo "警告: 下载的 AAR 文件包名不匹配 (不是 io.nekohasekai)，尝试使用生产版本..."; \
+				rm -f $(ANDROID_OUT)/*.aar; \
+				curl -L https://github.com/hiddify/hiddify-next-core/releases/download/v$(core.version)/$(CORE_NAME)-android.tar.gz | tar xz -C $(ANDROID_OUT)/; \
+				echo "已切换到生产版本 v$(core.version)"; \
+			fi; \
 		else \
-			echo "✓ AAR 文件包名验证通过 (io.nekohasekai)"; \
-		fi && \
-		rm -rf $$TEMP_DIR; \
+			echo "警告: 无法验证 AAR 文件包名，跳过验证"; \
+		fi && rm -rf $$TEMP_DIR 2>/dev/null || true; \
 		if [ -f $(ANDROID_OUT)/$(CORE_NAME).aar ]; then \
 			mv $(ANDROID_OUT)/$(CORE_NAME).aar $(ANDROID_OUT)/$(LIB_NAME).aar; \
 		fi; \
