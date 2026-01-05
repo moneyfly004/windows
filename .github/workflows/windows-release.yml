@@ -1,0 +1,138 @@
+name: Windows Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+env:
+  FLUTTER_VERSION: '3.24.0'
+  CHANNEL: prod
+
+jobs:
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2.16.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Setup dependencies
+        run: |
+          flutter pub get
+          flutter pub upgrade
+
+      - name: Prepare for Windows build
+        run: |
+          $env:CHANNEL = "prod"
+          flutter config --enable-windows-desktop
+          flutter doctor -v
+
+      - name: Build Windows
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: |
+          flutter build windows --target lib/main_prod.dart --dart-define sentry_dsn=$env:SENTRY_DSN --release
+          echo "=== Build output check ==="
+          if (Test-Path "build\windows\x64\runner\Release") {
+            Get-ChildItem -Path "build\windows\x64\runner\Release" -Recurse | Select-Object FullName, Length
+          }
+
+      - name: Copy Windows files
+        run: |
+          New-Item -ItemType Directory -Force -Path "out"
+          $version = "${{ github.event.inputs.version }}"
+          if ($version -eq "") {
+            $version = "${{ github.ref_name }}"
+          }
+          $version = $version -replace '^v', ''
+          
+          # 复制整个 Release 目录
+          if (Test-Path "build\windows\x64\runner\Release") {
+            Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-x64-$version.zip" -Force
+            echo "✓ Created Moneyfly-Windows-x64-$version.zip"
+          }
+          
+          # 也创建一个包含所有文件的目录结构
+          if (Test-Path "build\windows\x64\runner\Release") {
+            Copy-Item -Path "build\windows\x64\runner\Release\*" -Destination "out\Moneyfly-Windows-x64-$version\" -Recurse -Force
+            echo "✓ Copied files to out\Moneyfly-Windows-x64-$version\"
+          }
+          
+          Get-ChildItem -Path "out" | Select-Object Name, Length
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: out/*
+          retention-days: 30
+
+  release:
+    name: Create Release
+    needs: build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: ./out
+
+      - name: Get version tag
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: ${{ steps.get_version.outputs.version }}
+          body: |
+            ## Windows Release ${{ steps.get_version.outputs.version }}
+            
+            ### Downloads
+            - **Windows x64**: [Moneyfly-Windows-x64-${{ steps.get_version.outputs.version }}.zip](./Moneyfly-Windows-x64-${{ steps.get_version.outputs.version }}.zip)
+            
+            ### Installation
+            1. Download the ZIP file
+            2. Extract to a folder
+            3. Run `moneyfly.exe` (or the main executable)
+            
+            ### Changes
+            - Windows release build
+          files: ./out/*
+          draft: false
+          prerelease: false
+
