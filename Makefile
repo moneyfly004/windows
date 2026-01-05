@@ -169,6 +169,26 @@ ios-release: #not tested
 android-libs:
 	@$(MKDIR) $(ANDROID_OUT) || echo Folder already exists. Skipping...
 	curl -L $(CORE_URL)/$(CORE_NAME)-android.tar.gz | tar xz -C $(ANDROID_OUT)/
+	@echo "验证 AAR 文件包名..."
+	@AAR_FILE=$$(find $(ANDROID_OUT) -name "*.aar" -type f | head -1) && \
+	if [ -n "$$AAR_FILE" ]; then \
+		TEMP_DIR=$$(mktemp -d) && \
+		unzip -q "$$AAR_FILE" -d $$TEMP_DIR 2>/dev/null && \
+		if ! jar tf $$TEMP_DIR/classes.jar 2>/dev/null | grep -q "io/nekohasekai/libbox"; then \
+			echo "警告: 下载的 AAR 文件包名不匹配 (不是 io.nekohasekai)，尝试使用生产版本..."; \
+			rm -f $(ANDROID_OUT)/*.aar; \
+			curl -L https://github.com/hiddify/hiddify-next-core/releases/download/v$(core.version)/$(CORE_NAME)-android.tar.gz | tar xz -C $(ANDROID_OUT)/; \
+			echo "已切换到生产版本 v$(core.version)"; \
+		else \
+			echo "✓ AAR 文件包名验证通过 (io.nekohasekai)"; \
+		fi && \
+		rm -rf $$TEMP_DIR; \
+		if [ -f $(ANDROID_OUT)/$(CORE_NAME).aar ]; then \
+			mv $(ANDROID_OUT)/$(CORE_NAME).aar $(ANDROID_OUT)/$(LIB_NAME).aar; \
+		fi; \
+	else \
+		echo "错误: 未找到 AAR 文件"; \
+	fi
 
 android-apk-libs: android-libs
 android-aab-libs: android-libs
