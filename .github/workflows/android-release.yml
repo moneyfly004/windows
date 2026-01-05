@@ -60,8 +60,11 @@ jobs:
 
       - name: Prepare for Android APK
         run: |
+          export CHANNEL=prod
           make android-apk-prepare
-          tree android/app/libs/ || echo "libs directory check"
+          echo "=== AAR 文件检查 ==="
+          ls -lh android/app/libs/*.aar 2>/dev/null || echo "未找到 AAR 文件"
+          tree android/app/libs/ 2>/dev/null || echo "libs directory check"
 
       - name: Verify AAR file
         run: |
