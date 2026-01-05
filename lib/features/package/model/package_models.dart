@@ -51,7 +51,18 @@ class CreateOrderRequest with _$CreateOrderRequest {
 
   factory CreateOrderRequest.fromJson(Map<String, dynamic> json) =>
       _$CreateOrderRequestFromJson(json);
-  
-  Map<String, dynamic> toJson() => _$CreateOrderRequestToJson(this);
+}
+
+extension CreateOrderRequestExtension on CreateOrderRequest {
+  Map<String, dynamic> toJson() {
+    return {
+      'package_id': packageId,
+      'payment_method': paymentMethod,
+      if (couponCode != null) 'coupon_code': couponCode,
+      'use_balance': useBalance,
+      'balance_amount': balanceAmount,
+      'currency': currency,
+    };
+  }
 }
 

@@ -37,7 +37,7 @@ class SettingsOverviewPage extends HookConsumerWidget {
               // 套餐购买（放在关于上面）
               if (isAuthenticated.value ?? false) ...[
                 ListTile(
-                  leading: const Icon(FluentIcons.shopping_cart_24_regular),
+                  leading: Icon(FluentIcons.cart_24_regular),
                   title: const Text('套餐购买'),
                   trailing: const Icon(FluentIcons.chevron_right_24_regular),
                   onTap: () {
@@ -126,7 +126,7 @@ class SettingsOverviewPage extends HookConsumerWidget {
               if (isAuthenticated.value ?? false) ...[
                 const SettingsDivider(),
                 ListTile(
-                  leading: const Icon(FluentIcons.lock_24_regular),
+                  leading: Icon(FluentIcons.key_24_regular),
                   title: const Text('修改密码'),
                   trailing: const Icon(FluentIcons.chevron_right_24_regular),
                   onTap: () {
