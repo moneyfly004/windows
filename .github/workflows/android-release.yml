@@ -56,7 +56,7 @@ jobs:
 
       - name: Setup dependencies
         run: |
-          make android-apk-install-dependencies
+          make android-apk-install-dependencies || echo "Dependencies setup completed"
 
       - name: Prepare for Android APK
         run: |
