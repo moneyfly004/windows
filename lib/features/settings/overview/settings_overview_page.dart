@@ -9,7 +9,6 @@ import 'package:hiddify/features/settings/about/about_page.dart';
 import 'package:hiddify/features/settings/widgets/widgets.dart';
 import 'package:hiddify/utils/utils.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:hiddify/core/router/router.dart';
 
 class SettingsOverviewPage extends HookConsumerWidget {
   const SettingsOverviewPage({super.key});
