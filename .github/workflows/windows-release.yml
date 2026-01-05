@@ -75,30 +75,36 @@ jobs:
           # 确保 PATH 包含 pub cache
           $env:PATH = "$env:PATH;$env:USERPROFILE\.pub-cache\bin"
           
-          # 尝试使用 make，如果失败则直接构建
-          $buildSuccess = $false
-          if (Get-Command make -ErrorAction SilentlyContinue) {
-            Write-Host "Using make to build..."
+          Write-Host "=== Starting Windows Build ==="
+          Write-Host "SENTRY_DSN: $(if ($env:SENTRY_DSN) { 'Set' } else { 'Not set' })"
+          Write-Host "CHANNEL: $env:CHANNEL"
+          
+          # 首先尝试直接构建（更可靠）
+          Write-Host "Building with Flutter directly..."
+          flutter build windows --target lib/main_prod.dart --dart-define sentry_dsn=$env:SENTRY_DSN --release
+          
+          # 检查构建是否成功
+          if (-not (Test-Path "build\windows\x64\runner\Release")) {
+            Write-Error "Flutter build failed: build directory not found"
+            exit 1
+          }
+          
+          Write-Host "✓ Flutter build completed successfully"
+          
+          # 如果 flutter_distributor 可用，尝试打包
+          if (Get-Command flutter_distributor -ErrorAction SilentlyContinue) {
+            Write-Host "Packaging with flutter_distributor..."
             try {
-              bash -c "make windows-release"
-              $buildSuccess = $true
-            } catch {
-              Write-Host "Make build failed, trying direct build..."
-              $buildSuccess = $false
-            }
-          }
-          
-          if (-not $buildSuccess) {
-            Write-Host "Building directly with Flutter..."
-            flutter build windows --target lib/main_prod.dart --dart-define sentry_dsn=$env:SENTRY_DSN --release
-            # 如果 flutter_distributor 可用，也尝试打包
-            if (Get-Command flutter_distributor -ErrorAction SilentlyContinue) {
-              Write-Host "Packaging with flutter_distributor..."
               flutter_distributor package --flutter-build-args=verbose --platform windows --targets exe,msix --skip-clean --build-target lib/main_prod.dart --build-dart-define sentry_dsn=$env:SENTRY_DSN
+              Write-Host "✓ flutter_distributor packaging completed"
+            } catch {
+              Write-Host "⚠ flutter_distributor packaging failed, but build directory exists"
             }
+          } else {
+            Write-Host "⚠ flutter_distributor not available, skipping packaging"
           }
           
-          echo "=== Build output check ==="
+          Write-Host "=== Build output check ==="
           if (Test-Path "dist") {
             Write-Host "Dist directory contents:"
             Get-ChildItem -Path "dist" -Recurse | Select-Object FullName, Length
@@ -113,6 +119,8 @@ jobs:
             Write-Error "Build failed: No output files found in dist or build directory"
             exit 1
           }
+          
+          Write-Host "✓ Build completed successfully"
 
       - name: Copy Windows files
         run: |
@@ -123,44 +131,59 @@ jobs:
           }
           $version = $version -replace '^v', ''
           
+          Write-Host "=== Checking for build output ==="
+          Write-Host "Dist exists: $(Test-Path 'dist')"
+          Write-Host "Build exists: $(Test-Path 'build\windows\x64\runner\Release')"
+          
           $filesCopied = $false
           
           # 优先使用 flutter_distributor 生成的包
           if (Test-Path "dist") {
             Write-Host "Checking dist directory..."
-            Get-ChildItem -Path "dist" -Recurse -File | ForEach-Object {
-              Write-Host "Found file: $($_.FullName)"
-            }
-            
-            Get-ChildItem -Path "dist" -Recurse -Filter "*.exe" | ForEach-Object {
-              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.exe" -Force
-              Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.exe"
-              $filesCopied = $true
-            }
-            Get-ChildItem -Path "dist" -Recurse -Filter "*.msix" | ForEach-Object {
-              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.msix" -Force
-              Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.msix"
-              $filesCopied = $true
-            }
-            Get-ChildItem -Path "dist" -Recurse -Filter "*.zip" | ForEach-Object {
-              Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.zip" -Force
-              Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.zip"
-              $filesCopied = $true
+            $distFiles = Get-ChildItem -Path "dist" -Recurse -File
+            if ($distFiles) {
+              $distFiles | ForEach-Object {
+                Write-Host "Found file: $($_.FullName)"
+              }
+              
+              Get-ChildItem -Path "dist" -Recurse -Filter "*.exe" | ForEach-Object {
+                Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.exe" -Force
+                Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.exe"
+                $filesCopied = $true
+              }
+              Get-ChildItem -Path "dist" -Recurse -Filter "*.msix" | ForEach-Object {
+                Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.msix" -Force
+                Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.msix"
+                $filesCopied = $true
+              }
+              Get-ChildItem -Path "dist" -Recurse -Filter "*.zip" | ForEach-Object {
+                Copy-Item $_.FullName -Destination "out\Moneyfly-Windows-x64-$version.zip" -Force
+                Write-Host "✓ Copied $($_.Name) to out\Moneyfly-Windows-x64-$version.zip"
+                $filesCopied = $true
+              }
+            } else {
+              Write-Host "⚠ Dist directory exists but is empty"
             }
           }
           
           # 如果没有 dist 目录，使用 build 目录
-          if (-not $filesCopied -and (Test-Path "build\windows\x64\runner\Release")) {
-            Write-Host "Using build directory..."
-            Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-x64-$version.zip" -Force
-            Write-Host "✓ Created Moneyfly-Windows-x64-$version.zip from build directory"
-            $filesCopied = $true
+          if (-not $filesCopied) {
+            if (Test-Path "build\windows\x64\runner\Release") {
+              Write-Host "Using build directory..."
+              $buildFiles = Get-ChildItem -Path "build\windows\x64\runner\Release" -File
+              if ($buildFiles) {
+                Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "out\Moneyfly-Windows-x64-$version.zip" -Force
+                Write-Host "✓ Created Moneyfly-Windows-x64-$version.zip from build directory"
+                $filesCopied = $true
+              } else {
+                Write-Host "⚠ Build directory exists but is empty"
+              }
+            }
           }
           
           if (-not $filesCopied) {
             Write-Error "No files to copy! Build may have failed."
-            Write-Host "Dist exists: $(Test-Path 'dist')"
-            Write-Host "Build exists: $(Test-Path 'build\windows\x64\runner\Release')"
+            Write-Host "Please check the build logs above for errors."
             exit 1
           }
           

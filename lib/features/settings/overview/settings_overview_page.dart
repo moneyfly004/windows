@@ -17,9 +17,12 @@ class SettingsOverviewPage extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(translationsProvider);
     final isAuthenticatedAsync = ref.watch(isAuthenticatedProvider);
-    // 处理异步认证状态：使用 valueOrNull 获取值，如果为 null（加载中或出错）则默认为 false
-    // 但这样会导致加载中时菜单项不显示，所以我们需要等待加载完成
-    final isAuthenticated = isAuthenticatedAsync.valueOrNull ?? false;
+    // 正确处理异步认证状态：等待加载完成后再判断
+    final isAuthenticated = isAuthenticatedAsync.when(
+      data: (value) => value,
+      loading: () => false, // 加载中时先不显示，避免闪烁
+      error: (_, __) => false, // 出错时也不显示
+    );
 
     return Scaffold(
       body: CustomScrollView(
