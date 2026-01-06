@@ -29,6 +29,32 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Resolve version and update pubspec
+        id: versioning
+        run: |
+          # 优先使用手动触发时的版本输入，否则使用 tag 名
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RAW_VERSION="${{ github.event.inputs.version }}"
+          else
+            RAW_VERSION="${{ github.ref_name }}"
+          fi
+          # 去掉可能的前缀 v
+          RAW_VERSION="${RAW_VERSION#v}"
+          BUILD_NUMBER="${GITHUB_RUN_NUMBER:-1}"
+          VERSION_STRING="${RAW_VERSION}+${BUILD_NUMBER}"
+
+          echo "Resolved version: $VERSION_STRING"
+          echo "APP_VERSION=$RAW_VERSION" >> $GITHUB_ENV
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+          echo "VERSION_STRING=$VERSION_STRING" >> $GITHUB_ENV
+          echo "app_version=$RAW_VERSION" >> $GITHUB_OUTPUT
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "version_string=$VERSION_STRING" >> $GITHUB_OUTPUT
+
+          # 覆盖 pubspec.yaml 中的版本号，让应用显示为输入的版本
+          perl -0pi -e 's/^version:\s*.*/version: '"$VERSION_STRING"'/m' pubspec.yaml
+          grep -n "^version:" pubspec.yaml
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2.16.0
         with:
