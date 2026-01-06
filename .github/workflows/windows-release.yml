@@ -28,6 +28,38 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Resolve version and update pubspec
+        id: versioning
+        run: |
+          # 优先使用手动触发时的版本输入，否则使用 tag 名
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $rawVersion = "${{ github.event.inputs.version }}"
+          } else {
+            $rawVersion = "${{ github.ref_name }}"
+          }
+          # 去掉可能的前缀 v
+          $rawVersion = $rawVersion -replace '^v', ''
+          $buildNumber = "${{ github.run_number }}"
+          if ([string]::IsNullOrEmpty($buildNumber)) {
+            $buildNumber = "1"
+          }
+          $versionString = "$rawVersion+$buildNumber"
+
+          Write-Host "Resolved version: $versionString"
+          Write-Host "APP_VERSION=$rawVersion" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "BUILD_NUMBER=$buildNumber" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "VERSION_STRING=$versionString" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "app_version=$rawVersion" >> $env:GITHUB_OUTPUT
+          Write-Host "build_number=$buildNumber" >> $env:GITHUB_OUTPUT
+          Write-Host "version_string=$versionString" >> $env:GITHUB_OUTPUT
+
+          # 覆盖 pubspec.yaml 中的版本号，让应用显示为输入的版本
+          $pubspecContent = Get-Content -Path "pubspec.yaml" -Raw -Encoding utf8
+          $pubspecContent = $pubspecContent -replace '(?m)^version:\s*.*', "version: $versionString"
+          Set-Content -Path "pubspec.yaml" -Value $pubspecContent -Encoding utf8 -NoNewline
+          Write-Host "Updated pubspec.yaml version to: $versionString"
+          Select-String -Path "pubspec.yaml" -Pattern "^version:"
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2.16.0
         with:
@@ -457,7 +489,6 @@ jobs:
         with:
           name: windows-release
           path: ./out
-          if-no-files-found: warn  # 如果找不到文件，只警告不失败
 
       - name: Check artifacts
         run: |
