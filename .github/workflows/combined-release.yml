@@ -130,11 +130,67 @@ jobs:
             exit 1
           fi
 
+      - name: Configure Gradle for better network handling
+        run: |
+          echo "=== Configuring Gradle network settings ==="
+          # 添加网络超时和重试配置到 gradle.properties
+          cat >> android/gradle.properties << EOF
+          
+          # Network timeout and retry settings
+          systemProp.org.gradle.internal.http.connectionTimeout=60000
+          systemProp.org.gradle.internal.http.socketTimeout=60000
+          org.gradle.daemon=true
+          org.gradle.parallel=true
+          org.gradle.configureondemand=true
+          EOF
+          echo "✓ Gradle network settings configured"
+          cat android/gradle.properties
+
+      - name: Clean Gradle cache and stop daemon
+        run: |
+          echo "=== Cleaning Gradle cache and stopping daemon ==="
+          cd android
+          ./gradlew --stop || true
+          # 清理 Gradle 缓存（可选，如果网络问题持续可以启用）
+          # rm -rf ~/.gradle/caches/ || true
+          cd ..
+
       - name: Build Android APK
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
-          make android-apk-release
+          echo "=== Building Android APK ==="
+          # 设置 Gradle 网络超时和重试
+          export GRADLE_OPTS="-Dorg.gradle.daemon=true -Dorg.gradle.parallel=true -Dorg.gradle.configureondemand=true"
+          
+          # 重试机制：最多重试 3 次
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          BUILD_SUCCESS=false
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$BUILD_SUCCESS" = false ]; do
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "=== Build attempt $RETRY_COUNT of $MAX_RETRIES ==="
+            
+            if make android-apk-release; then
+              BUILD_SUCCESS=true
+              echo "✓ Build succeeded on attempt $RETRY_COUNT"
+            else
+              echo "✗ Build failed on attempt $RETRY_COUNT"
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "Waiting 10 seconds before retry..."
+                sleep 10
+                # 停止 Gradle 守护进程并清理
+                cd android && ./gradlew --stop || true && cd ..
+              fi
+            fi
+          done
+          
+          if [ "$BUILD_SUCCESS" = false ]; then
+            echo "✗ Build failed after $MAX_RETRIES attempts"
+            exit 1
+          fi
+          
           ls -R build/app/outputs/flutter-apk/ || echo "APK output check"
 
       - name: Copy APK files
